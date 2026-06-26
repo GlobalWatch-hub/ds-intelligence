@@ -1,0 +1,16 @@
+[Unit]
+Description=DS Intelligence Frontend (Next.js)
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/ds-engine/frontend
+Environment=NEXT_PUBLIC_API_BASE_URL=https://dscredito.synertia-gw.ai
+Environment=PORT=3005
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

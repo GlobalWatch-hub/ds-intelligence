@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body { background: #f7f8fb; color: #0c0f17; }
+.card { @apply bg-white rounded-2xl shadow-card p-5; }
+.btn-primary { @apply inline-flex items-center gap-2 rounded-xl bg-ds-500 hover:bg-ds-600 text-white font-medium px-4 py-2 text-sm; }
+.btn-ghost { @apply inline-flex items-center gap-2 rounded-xl border border-ink-100 hover:bg-ink-50 text-ink-700 font-medium px-4 py-2 text-sm; }
+.chip { @apply inline-flex items-center rounded-full bg-ink-100 text-ink-700 text-xs font-medium px-2.5 py-1; }
+.chip-alert { @apply bg-ds-50 text-ds-700; }
