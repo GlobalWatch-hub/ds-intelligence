@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 html, body {
-  background-color: #f7f8fb;
+  background-color: #d7dce8;
   /* Single large navy Synertia watermark, centred and fixed behind every page. */
   background-image: url('/logo-synertia-watermark.png');
   background-repeat: no-repeat;

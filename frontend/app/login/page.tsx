@@ -35,7 +35,7 @@ function LoginInner() {
 
   return (
     <div className="min-h-[78vh] flex items-center justify-center">
-      <form onSubmit={submit} className="card w-full max-w-md space-y-6 p-7">
+      <form onSubmit={submit} className="w-full max-w-md space-y-6">
         <div className="flex flex-col items-center text-center">
           <img src="/ds-logo.svg" alt="DS Crédito" className="h-14 w-14 mb-3" />
           <h1 className="text-xl font-semibold text-ink-900">DS Intelligence</h1>
@@ -44,8 +44,8 @@ function LoginInner() {
 
         <div className="space-y-3">
           {/* Utilizador — icon-prefixed field */}
-          <div className="flex items-stretch rounded-xl border border-ink-200 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-ds-300">
-            <span className="flex items-center px-3 border-r border-ink-200 text-ink-400">
+          <div className="flex items-stretch rounded-xl border border-white/70 bg-white/70 backdrop-blur-sm shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-ds-300">
+            <span className="flex items-center px-3 border-r border-ink-200/60 text-ink-500">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} className="h-5 w-5" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
               </svg>
@@ -59,8 +59,8 @@ function LoginInner() {
             />
           </div>
           {/* Palavra-passe — icon-prefixed field */}
-          <div className="flex items-stretch rounded-xl border border-ink-200 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-ds-300">
-            <span className="flex items-center px-3 border-r border-ink-200 text-ink-400">
+          <div className="flex items-stretch rounded-xl border border-white/70 bg-white/70 backdrop-blur-sm shadow-sm overflow-hidden focus-within:ring-2 focus-within:ring-ds-300">
+            <span className="flex items-center px-3 border-r border-ink-200/60 text-ink-500">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} className="h-5 w-5" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
               </svg>
