@@ -13,6 +13,10 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
     return <main className="max-w-7xl mx-auto px-6 py-8">{children}</main>;
   }
 
+  // The dashboard spans the full screen width; every other page keeps the
+  // centred 7xl column.
+  const fullWidth = pathname === '/dashboard';
+
   return (
     <>
       <header className="bg-white border-b border-ink-100 sticky top-0 z-30">
@@ -38,9 +42,11 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
-      <main className="max-w-7xl mx-auto px-6 py-8">{children}</main>
+      <main className={`${fullWidth ? 'w-full' : 'max-w-7xl mx-auto'} px-6 py-8 pb-28`}>{children}</main>
+      {/* Footer is fixed to the viewport bottom so it stays in the same place on
+          every page (never reflows with the content). */}
       <footer
-        className="mt-12 py-6 flex items-center justify-center gap-2 text-sm text-white/60"
+        className="fixed bottom-0 inset-x-0 z-30 py-6 flex items-center justify-center gap-2 text-sm text-white/60"
         style={{ backgroundColor: '#0d132a' }}
       >
         <span>Powered by</span>

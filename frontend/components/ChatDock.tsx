@@ -39,7 +39,7 @@ export default function ChatDock() {
   if (!open) {
     return (
       <button
-        className="fixed bottom-6 right-6 btn-primary shadow-lg z-40"
+        className="fixed bottom-24 right-6 btn-primary shadow-lg z-40"
         onClick={() => setOpen(true)}
       >
         Pergunte à Ana
@@ -48,7 +48,7 @@ export default function ChatDock() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 w-[380px] max-w-[92vw] h-[520px] bg-white rounded-2xl shadow-2xl flex flex-col z-40 border border-ink-100">
+    <div className="fixed bottom-24 right-6 w-[380px] max-w-[92vw] h-[520px] bg-white rounded-2xl shadow-2xl flex flex-col z-40 border border-ink-100">
       <div className="px-4 py-3 border-b border-ink-100 flex items-center justify-between">
         <div>
           <div className="font-semibold text-ink-900">Ana</div>
