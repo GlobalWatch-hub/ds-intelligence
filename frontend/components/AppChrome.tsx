@@ -37,13 +37,13 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
         className="fixed inset-y-0 left-0 w-60 z-30 flex flex-col text-white"
         style={{ backgroundColor: SYNERTIA_NAVY }}
       >
-        <div className="px-5 py-5">
+        <div className="px-5 py-5 flex justify-center">
           <Link href="/" aria-label="Synertia" className="inline-flex">
             <img src="/logo-synertia.png" alt="Synertia" className="h-8 w-auto" />
           </Link>
         </div>
 
-        <nav className="flex-1 px-3 py-2 flex flex-col gap-1 text-sm">
+        <nav className="flex-1 px-3 py-2 flex flex-col gap-1 text-sm text-center">
           {NAV.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + '/');
             return (
@@ -62,14 +62,14 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
           })}
           <Link
             href="/clientes-live"
-            className="mt-2 rounded-lg px-3 py-2 inline-flex items-center font-medium text-emerald-300 hover:text-emerald-200 hover:bg-white/10"
+            className="mt-2 rounded-lg px-3 py-2 flex items-center justify-center font-medium text-emerald-300 hover:text-emerald-200 hover:bg-white/10"
           >
             <span className="inline-flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse mr-2" />
             CRM em direto
           </Link>
         </nav>
 
-        <div className="px-3 py-4 border-t border-white/10">
+        <div className="px-3 py-4 border-t border-white/10 flex justify-center">
           <LogoutButton />
         </div>
       </aside>
