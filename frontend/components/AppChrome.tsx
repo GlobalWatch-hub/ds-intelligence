@@ -124,8 +124,12 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
       <div className="ml-60">
         <header className="sticky top-0 z-20 bg-white border-b border-ink-100">
           <div className="h-16 flex items-center justify-center px-6">
-            <Link href="/" aria-label="DS Crédito" className="inline-flex">
+            <Link href="/" aria-label="DS Intelligence" className="flex items-center gap-3">
               <img src="/ds-logo.svg" alt="DS Crédito" className="h-10 w-10" />
+              <span className="font-semibold text-ink-900">
+                DS Intelligence
+                <span className="ml-2 text-ink-400 font-normal">· DS Crédito Ramada</span>
+              </span>
             </Link>
           </div>
         </header>
