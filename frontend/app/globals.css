@@ -4,10 +4,11 @@
 
 html, body {
   background-color: #f7f8fb;
-  /* Subtle, always-present navy Synertia watermark behind every page. */
+  /* Single large navy Synertia watermark, centred and fixed behind every page. */
   background-image: url('/logo-synertia-watermark.png');
-  background-repeat: repeat;
-  background-size: 360px auto;
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: min(78vw, 1100px) auto;
   background-attachment: fixed;
   color: #0c0f17;
 }
