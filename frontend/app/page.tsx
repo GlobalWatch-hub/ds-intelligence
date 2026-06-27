@@ -4,7 +4,7 @@ type Card = { href: string; title: string; desc: string; color: string; icon: Re
 
 function Svg({ children }: { children: React.ReactNode }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} className="h-6 w-6" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} className="h-8 w-8" aria-hidden="true">
       {children}
     </svg>
   );
@@ -63,36 +63,31 @@ export default function Welcome() {
       <h1 className="text-3xl md:text-4xl font-semibold text-ink-900">
         Bem-vindo à DS Intelligence
       </h1>
-      <p className="mt-4 max-w-2xl mx-auto text-ink-500 text-lg leading-relaxed">
-        A plataforma de inteligência comercial da{' '}
-        <strong className="text-ink-700">DS Crédito</strong> — clientes, processos, gatilhos do
-        ciclo de vida e newsletters, tudo num só sítio.
-      </p>
 
-      <div className="mt-6 flex justify-center">
+      <div className="mt-8 flex justify-center">
         <Link href="/dashboard" className="btn-primary text-base px-6 py-3">
           Entrar no Dashboard →
         </Link>
       </div>
 
       {/* Quick-access cards — brand "Nossas Soluções" style */}
-      <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto">
+      <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-5 max-w-6xl mx-auto">
         {CARDS.map((c) => (
           <Link
             key={c.href}
             href={c.href}
-            className="card group block text-left transition-all duration-200 hover:-translate-y-1 hover:shadow-xl"
+            className="group block text-left rounded-2xl shadow-card bg-white/40 backdrop-blur-sm p-7 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:bg-white/60"
           >
             <div
-              className="h-11 w-11 rounded-xl flex items-center justify-center mb-4"
-              style={{ backgroundColor: `${c.color}1a`, color: c.color }}
+              className="h-14 w-14 rounded-2xl flex items-center justify-center mb-5"
+              style={{ backgroundColor: `${c.color}1f`, color: c.color }}
             >
               {c.icon}
             </div>
-            <div className="font-semibold text-ink-900">{c.title}</div>
-            <div className="text-sm text-ink-400 mt-1">{c.desc}</div>
+            <div className="text-lg font-semibold text-ink-900">{c.title}</div>
+            <div className="text-sm text-ink-400 mt-1.5">{c.desc}</div>
             <div
-              className="mt-4 inline-flex items-center text-sm font-medium transition-transform group-hover:translate-x-1"
+              className="mt-6 inline-flex items-center text-sm font-medium transition-transform group-hover:translate-x-1"
               style={{ color: c.color }}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4" aria-hidden="true">
