@@ -17,8 +17,3 @@ html, body {
 .btn-ghost { @apply inline-flex items-center gap-2 rounded-xl border border-ink-100 hover:bg-ink-50 text-ink-700 font-medium px-4 py-2 text-sm; }
 .chip { @apply inline-flex items-center rounded-full bg-ink-100 text-ink-700 text-xs font-medium px-2.5 py-1; }
 .chip-alert { @apply bg-ds-50 text-ds-700; }
-
-/* Welcome-page orbiting cards: the ring spins, each card counter-spins to stay
-   upright. Paused on hover and permanently stopped after a click. */
-@keyframes orbit { to { transform: rotate(360deg); } }
-@keyframes orbit-rev { to { transform: rotate(-360deg); } }
