@@ -24,11 +24,11 @@ export default function LogoutButton() {
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-full border border-white/20 bg-white/10 pl-3 pr-1 py-1">
-      <span className="text-sm text-white/90 font-medium">{nome ?? 'Utilizador'}</span>
+    <div className="flex items-center justify-between gap-2 rounded-full border border-white/15 bg-white/10 pl-3 pr-1 py-0.5">
+      <span className="text-xs text-white/80 font-medium truncate">{nome ?? 'Utilizador'}</span>
       <button
         onClick={logout}
-        className="rounded-full bg-white/15 border border-white/20 px-2.5 py-0.5 text-xs text-white/80 hover:text-white hover:bg-white/25"
+        className="rounded-full bg-white/15 border border-white/15 px-2 py-0.5 text-[11px] text-white/75 hover:text-white hover:bg-white/25"
       >
         Sair
       </button>

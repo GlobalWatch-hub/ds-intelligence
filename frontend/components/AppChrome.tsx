@@ -114,7 +114,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
           </Link>
         </nav>
 
-        <div className="px-3 py-4 border-t border-white/10">
+        <div className="px-3 py-3 border-t border-white/10">
           <LogoutButton />
         </div>
       </aside>
