@@ -4,7 +4,7 @@ type Card = { href: string; title: string; desc: string; color: string; icon: Re
 
 function Svg({ children }: { children: React.ReactNode }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} className="h-8 w-8" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} className="h-9 w-9" aria-hidden="true">
       {children}
     </svg>
   );
@@ -59,7 +59,7 @@ const CARDS: Card[] = [
 
 export default function Welcome() {
   return (
-    <div className="py-6 text-center">
+    <div className="min-h-[80vh] flex flex-col items-center justify-center text-center py-8">
       <h1 className="text-3xl md:text-4xl font-semibold text-ink-900">
         Bem-vindo à DS Intelligence
       </h1>
@@ -71,21 +71,21 @@ export default function Welcome() {
       </div>
 
       {/* Quick-access cards — brand "Nossas Soluções" style */}
-      <div className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-5 max-w-6xl mx-auto">
+      <div className="mt-20 grid grid-cols-2 md:grid-cols-4 gap-6 w-full max-w-6xl mx-auto">
         {CARDS.map((c) => (
           <Link
             key={c.href}
             href={c.href}
-            className="group block text-left rounded-2xl shadow-card bg-white/40 backdrop-blur-sm p-7 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:bg-white/60"
+            className="group block text-left rounded-2xl shadow-card bg-white/40 backdrop-blur-sm p-8 transition-all duration-200 hover:-translate-y-1 hover:shadow-xl hover:bg-white/60"
           >
             <div
-              className="h-14 w-14 rounded-2xl flex items-center justify-center mb-5"
+              className="h-16 w-16 rounded-2xl flex items-center justify-center mb-6"
               style={{ backgroundColor: `${c.color}1f`, color: c.color }}
             >
               {c.icon}
             </div>
-            <div className="text-lg font-semibold text-ink-900">{c.title}</div>
-            <div className="text-sm text-ink-400 mt-1.5">{c.desc}</div>
+            <div className="text-xl font-semibold text-ink-900">{c.title}</div>
+            <div className="text-sm text-ink-400 mt-2">{c.desc}</div>
             <div
               className="mt-6 inline-flex items-center text-sm font-medium transition-transform group-hover:translate-x-1"
               style={{ color: c.color }}
