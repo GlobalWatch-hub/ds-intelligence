@@ -250,14 +250,33 @@ export default function Dashboard() {
       </section>
 
       <section className="card">
-        <h2 className="text-lg font-semibold text-ink-900">Próximos passos sugeridos</h2>
+        <h2 className="text-lg font-semibold text-ink-900">Ações Recomendadas</h2>
         <ul className="mt-3 space-y-2 text-sm text-ink-700">
-          <li>· Disparar parabéns aos {data.cards.find(c=>c.key==='aniversarios_7d')?.value ?? 0} clientes que fazem anos esta semana.</li>
-          <li>· Acompanhar {data.cards.find(c=>c.key==='escritura_3m')?.value ?? 0} clientes que celebram 3 meses de escritura.</li>
-          <li>· Antecipar renovação de {data.cards.find(c=>c.key==='apolices_60d')?.value ?? 0} apólices nos próximos 60 dias.</li>
-          <li>· Rever condições com {data.cards.find(c=>c.key==='taxa_fixa_90d')?.value ?? 0} clientes cujo período de taxa fixa termina em 90 dias.</li>
-          <li>· Resolver {data.cards.find(c=>c.key==='docs_atraso')?.value ?? 0} processos com documentação pendente há mais de 7 dias.</li>
-          <li>· Reactivar {data.cards.find(c=>c.key==='leads_dormentes')?.value ?? 0} leads pendentes há mais de 30 dias.</li>
+          <li>
+            <strong>Aniversários:</strong> Enviar felicitações aos{' '}
+            {data.cards.find((c) => c.key === 'aniversarios_7d')?.value ?? 0} clientes que
+            celebram o aniversário esta semana.
+          </li>
+          <li>
+            <strong>Pós-venda:</strong> Acompanhar o cliente com 3 meses de escritura celebrada.
+          </li>
+          <li>
+            <strong>Fidelização:</strong> Antecipar a renovação de apólices com vencimento nos
+            próximos 60 dias.
+          </li>
+          <li>
+            <strong>Taxa Fixa:</strong> Rever condições contratuais dos clientes cujo período
+            fixo termina em 90 dias.
+          </li>
+          <li>
+            <strong>Pendentes:</strong> Resolver processos com documentação em atraso há mais de
+            7 dias.
+          </li>
+          <li>
+            <strong>Reativação:</strong> Recuperar as{' '}
+            {data.cards.find((c) => c.key === 'leads_dormentes')?.value ?? 0} leads pendentes sem
+            interação há mais de 30 dias.
+          </li>
         </ul>
       </section>
     </div>
