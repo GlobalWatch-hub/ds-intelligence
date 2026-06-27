@@ -290,7 +290,7 @@ function ActivitySection({
       ) : rows.length === 0 ? (
         <p className="text-ink-400 text-sm">Sem contactos para esta atividade {useRange ? 'neste intervalo' : 'neste momento'}.</p>
       ) : (
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead>
             <tr className="text-left text-ink-400 border-b border-ink-100">
               <th className="py-2">Nome</th>
@@ -355,7 +355,7 @@ function ActivitySection({
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
     </div>
   );
