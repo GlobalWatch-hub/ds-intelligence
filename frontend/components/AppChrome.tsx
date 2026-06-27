@@ -137,11 +137,11 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
                 Voltar
               </button>
             )}
-            <Link href="/" aria-label="DS Intelligence" className="flex items-center gap-3">
-              <img src="/ds-logo.svg" alt="DS Crédito" className="h-10 w-10" />
-              <span className="font-semibold text-ink-900">
-                DS Intelligence
-                <span className="ml-2 text-ink-400 font-normal">· DS Crédito Ramada</span>
+            <Link href="/" aria-label="DS Matrix" className="flex items-center gap-3">
+              <img src="/ds-logo.svg" alt="DS Crédito" className="h-12 w-12" />
+              <span className="text-2xl font-semibold text-ink-900">
+                DS Matrix
+                <span className="ml-2 text-base text-ink-400 font-normal">· DS Crédito Ramada</span>
               </span>
             </Link>
           </div>

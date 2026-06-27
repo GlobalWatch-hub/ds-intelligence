@@ -12,7 +12,7 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: 'DS Intelligence — DS Crédito Ramada',
+  title: 'DS Matrix — DS Crédito Ramada',
   description: 'Plataforma de Inteligência Comercial para DS Crédito + DS Seguros',
 };
 

@@ -38,7 +38,7 @@ function LoginInner() {
       <form onSubmit={submit} className="w-full max-w-md space-y-6">
         <div className="flex flex-col items-center text-center">
           <img src="/ds-logo.svg" alt="DS Crédito" className="h-14 w-14 mb-3" />
-          <h1 className="text-xl font-semibold text-ink-900">DS Intelligence</h1>
+          <h1 className="text-xl font-semibold text-ink-900">DS Matrix</h1>
           <p className="text-sm text-ink-400 mt-1">Introduza as suas credenciais de acesso.</p>
         </div>
 

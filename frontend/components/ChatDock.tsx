@@ -52,7 +52,7 @@ export default function ChatDock() {
       <div className="px-4 py-3 border-b border-ink-100 flex items-center justify-between">
         <div>
           <div className="font-semibold text-ink-900">Ana</div>
-          <div className="text-xs text-ink-400">Assistente DS Intelligence</div>
+          <div className="text-xs text-ink-400">Assistente DS Matrix</div>
         </div>
         <button onClick={() => setOpen(false)} className="text-ink-400 hover:text-ds-600">×</button>
       </div>

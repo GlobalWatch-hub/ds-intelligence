@@ -60,8 +60,9 @@ const CARDS: Card[] = [
 export default function Welcome() {
   return (
     <div className="min-h-[80vh] flex flex-col items-center justify-center text-center py-8">
+      <img src="/ds-logo.svg" alt="DS Crédito" className="h-20 w-20 mb-6" />
       <h1 className="text-3xl md:text-4xl font-semibold text-ink-900">
-        Bem-vindo à DS Intelligence
+        Bem-vindo à DS Matrix
       </h1>
 
       <div className="mt-8 flex justify-center">

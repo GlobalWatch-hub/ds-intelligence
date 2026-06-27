@@ -25,7 +25,7 @@ from ..db import supabase
 router = APIRouter()
 
 
-SYSTEM_PROMPT = """You are Ana, the operational assistant inside DS Intelligence at the
+SYSTEM_PROMPT = """You are Ana, the operational assistant inside DS Matrix at the
 DS Crédito Ramada – Jardim da Amoreira loja. Sílvia and her gestores ask you
 natural-language questions about their clients, processes, and policies. You answer
 from the JSON snapshot of the CRM provided in the user message.
