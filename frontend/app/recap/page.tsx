@@ -139,7 +139,7 @@ export default function RecapPage() {
         <p className="text-sm text-ink-400 mb-3">
           {t.open_now} processos abertos · volume total {EUR(t.open_volume_eur)} · clique num estado para ver os processos
         </p>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto"><table className="w-full text-sm">
           <thead>
             <tr className="text-left text-ink-400 border-b border-ink-100">
               <th className="py-2">Estado</th>
@@ -177,13 +177,13 @@ export default function RecapPage() {
               </Fragment>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </section>
 
       {data.closed_won_detail.length > 0 && (
         <section className="card">
           <h2 className="text-lg font-semibold text-emerald-800 mb-3">✓ Contratos celebrados da semana ({data.closed_won_detail.length})</h2>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead>
               <tr className="text-left text-ink-400 border-b border-ink-100">
                 <th className="py-2">Referência</th>
@@ -206,14 +206,14 @@ export default function RecapPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </section>
       )}
 
       {data.closed_lost_detail.length > 0 && (
         <section className="card">
           <h2 className="text-lg font-semibold text-rose-800 mb-3">✗ Anulados/Perdidos da semana ({data.closed_lost_detail.length})</h2>
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead>
               <tr className="text-left text-ink-400 border-b border-ink-100">
                 <th className="py-2">Referência</th>
@@ -234,7 +234,7 @@ export default function RecapPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         </section>
       )}
 
@@ -252,7 +252,7 @@ export default function RecapPage() {
           ))}
         </div>
         {data.ladder.rows.length > 0 && (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead>
               <tr className="text-left text-ink-400 border-b border-ink-100">
                 <th className="py-2">Cliente</th>
@@ -271,7 +271,7 @@ export default function RecapPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </section>
 

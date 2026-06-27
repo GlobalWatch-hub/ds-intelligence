@@ -128,7 +128,7 @@ export default function LeadsPage() {
         {!data?.leads?.length ? (
           <p className="text-ink-400 text-sm">Sem leads ainda.</p>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead>
               <tr className="text-left text-ink-400 border-b border-ink-100">
                 <th className="py-2">Nome</th>
@@ -151,7 +151,7 @@ export default function LeadsPage() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table></div>
         )}
       </div>
     </div>

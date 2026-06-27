@@ -1,7 +1,6 @@
 'use client';
 import { usePathname } from 'next/navigation';
 import {
-  SynertiaShell,
   type SynertiaConfig,
   IconContacts,
   IconDashboard,
@@ -9,6 +8,7 @@ import {
   IconNewsletter,
   IconReport,
 } from '@globalwatch-hub/synertia-ui';
+import { SynertiaShellResponsive } from './SynertiaShellResponsive';
 import ChatDock from './ChatDock';
 import LogoutButton from './LogoutButton';
 
@@ -34,9 +34,13 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return (
     <>
-      <SynertiaShell config={config} userSlot={<LogoutButton />}>
+      <SynertiaShellResponsive
+        config={config}
+        brandMarkSrc="/logo-synertia-icon.png"
+        userSlot={<LogoutButton />}
+      >
         {children}
-      </SynertiaShell>
+      </SynertiaShellResponsive>
       {pathname !== '/login' && <ChatDock />}
     </>
   );

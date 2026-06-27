@@ -1,5 +1,5 @@
 import './globals.css';
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Montserrat } from 'next/font/google';
 import AppChrome from '../components/AppChrome';
 
@@ -14,6 +14,13 @@ const montserrat = Montserrat({
 export const metadata: Metadata = {
   title: 'DS Matrix — DS Crédito Ramada',
   description: 'Plataforma de Inteligência Comercial para DS Crédito + DS Seguros',
+};
+
+// Garante o viewport (largura = dispositivo) para a app ser usável em
+// telemóvel/tablet — sem isto o chrome responsivo (drawer/rail) não encaixa.
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
