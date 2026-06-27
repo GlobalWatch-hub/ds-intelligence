@@ -7,8 +7,9 @@
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
-echo "→ git pull --ff-only origin main"
-git pull --ff-only origin main
+echo "→ sync to origin/main (hard reset; discards local lockfile drift)"
+git fetch origin main
+git reset --hard origin/main
 
 echo "→ backend deps"
 backend/venv/bin/pip install -q -r backend/requirements.txt

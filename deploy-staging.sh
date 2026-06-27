@@ -9,8 +9,9 @@
 set -euo pipefail
 cd "$(dirname "$(readlink -f "$0")")"
 
-echo "→ git pull --ff-only origin staging"
-git pull --ff-only origin staging
+echo "→ sync to origin/staging (hard reset; discards local lockfile drift)"
+git fetch origin staging
+git reset --hard origin/staging
 
 echo "→ frontend build"
 ( cd frontend && npm install --no-audit --no-fund && npm run build )
