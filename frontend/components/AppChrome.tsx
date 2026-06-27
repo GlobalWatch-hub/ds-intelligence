@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import ChatDock from './ChatDock';
 import LogoutButton from './LogoutButton';
 
@@ -62,6 +62,7 @@ const NAV = [
 // the full chrome.
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
 
   if (pathname === '/login') {
     return <main className="max-w-7xl mx-auto px-6 py-8">{children}</main>;
@@ -123,7 +124,19 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
           centred DS logo — pure chrome, never duplicates page content. */}
       <div className="ml-60">
         <header className="sticky top-0 z-20 bg-white border-b border-ink-100">
-          <div className="h-16 flex items-center justify-center px-6">
+          <div className="relative h-16 flex items-center justify-center px-6">
+            {pathname !== '/' && (
+              <button
+                onClick={() => router.back()}
+                aria-label="Voltar"
+                className="absolute left-4 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-ink-500 hover:text-ds-600 hover:bg-ink-50"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} className="h-5 w-5" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
+                </svg>
+                Voltar
+              </button>
+            )}
             <Link href="/" aria-label="DS Intelligence" className="flex items-center gap-3">
               <img src="/ds-logo.svg" alt="DS Crédito" className="h-10 w-10" />
               <span className="font-semibold text-ink-900">
