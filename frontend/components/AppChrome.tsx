@@ -1,6 +1,7 @@
 'use client';
 import { usePathname } from 'next/navigation';
 import {
+  SynertiaShell,
   type SynertiaConfig,
   IconContacts,
   IconDashboard,
@@ -8,14 +9,15 @@ import {
   IconNewsletter,
   IconReport,
 } from '@globalwatch-hub/synertia-ui';
-import { SynertiaShellResponsive } from './SynertiaShellResponsive';
 import ChatDock from './ChatDock';
 import LogoutButton from './LogoutButton';
 
 // DS Matrix client tokens for the shared Synertia chrome. Only these change per
-// platform; the navy chrome itself lives in @globalwatch-hub/synertia-ui.
+// platform; the navy chrome (responsive drawer + collapsible rail) lives in
+// @globalwatch-hub/synertia-ui (>= 0.2.0).
 const config: SynertiaConfig = {
   brandLogoSrc: '/logo-synertia.png',
+  brandMarkSrc: '/logo-synertia-icon.png',
   clientLogoSrc: '/ds-logo.svg',
   productName: 'DS Matrix',
   clientName: 'DS Crédito Ramada',
@@ -28,19 +30,16 @@ const config: SynertiaConfig = {
     { href: '/recap', label: 'Recap semanal', icon: <IconReport /> },
   ],
   liveLink: { href: '/clientes-live', label: 'CRM em direto' },
+  fullWidthRoutes: ['/dashboard'],
 };
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return (
     <>
-      <SynertiaShellResponsive
-        config={config}
-        brandMarkSrc="/logo-synertia-icon.png"
-        userSlot={<LogoutButton />}
-      >
+      <SynertiaShell config={config} userSlot={<LogoutButton />}>
         {children}
-      </SynertiaShellResponsive>
+      </SynertiaShell>
       {pathname !== '/login' && <ChatDock />}
     </>
   );
