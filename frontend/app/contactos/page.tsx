@@ -125,9 +125,9 @@ export default function ContactosPage() {
       <div>
         <h1 className="text-2xl font-semibold text-ink-900">Contactos dos consultores</h1>
         <p className="text-ink-400 mt-1">
-          Cada consultor traz a sua rede de contactos quando entra na loja. Aqui carregamos esses contactos
-          e disparamos a mensagem de boas-vindas em nome do consultor — e mensagens regulares, sempre que
-          a DS o entender.
+          Centralize e gira as carteiras de contactos da equipa. Permite
+          automatizar réguas de comunicação e mensagens de acompanhamento
+          regulares em nome de cada consultor.
         </p>
       </div>
 

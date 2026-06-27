@@ -15,7 +15,9 @@ echo "→ backend deps"
 backend/venv/bin/pip install -q -r backend/requirements.txt
 
 echo "→ frontend build"
-( cd frontend && npm install --no-audit --no-fund && npm run build )
+# Injeta o short SHA no build para o rótulo de versão (NEXT_PUBLIC_BUILD_SHA).
+SHA="$(git rev-parse --short=7 HEAD)"
+( cd frontend && npm install --no-audit --no-fund && NEXT_PUBLIC_BUILD_SHA="$SHA" npm run build )
 
 echo "→ restart services"
 sudo systemctl restart ds-intelligence

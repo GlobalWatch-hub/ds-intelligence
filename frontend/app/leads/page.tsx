@@ -48,8 +48,9 @@ export default function LeadsPage() {
       <div>
         <h1 className="text-2xl font-semibold text-ink-900">Leads</h1>
         <p className="text-ink-400 mt-1">
-          Captura de novos contactos + reativação de leads dormentes. Ao criar uma lead, a plataforma
-          dispara automaticamente o RGPD e a lista de documentação necessária.
+          Faça a gestão de novas oportunidades e recupere leads dormentes. O
+          sistema automatiza o envio do consentimento de RGPD e faz o pedido
+          inicial da documentação necessária.
         </p>
       </div>
 

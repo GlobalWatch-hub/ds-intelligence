@@ -8,9 +8,15 @@ import {
   IconLeads,
   IconNewsletter,
   IconReport,
+  VERSION as UI_VERSION,
 } from '@globalwatch-hub/synertia-ui';
 import ChatDock from './ChatDock';
 import LogoutButton from './LogoutButton';
+
+// Versão: [plataforma].[pacote UI] build [git]. A plataforma está na v1; o git
+// sha é injetado no build (NEXT_PUBLIC_BUILD_SHA, ver deploy.sh).
+const BUILD_SHA = (process.env.NEXT_PUBLIC_BUILD_SHA ?? '').slice(0, 7);
+const VERSION_LABEL = `1.${UI_VERSION}${BUILD_SHA ? ` build ${BUILD_SHA}` : ''}`;
 
 // DS Matrix client tokens for the shared Synertia chrome. Only these change per
 // platform; the navy chrome (responsive drawer + collapsible rail) lives in
@@ -37,7 +43,15 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   return (
     <>
-      <SynertiaShell config={config} userSlot={<LogoutButton />}>
+      <SynertiaShell
+        config={config}
+        brandSlot={
+          <span className="inline-block rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[9px] font-semibold tracking-wider text-white/70 shadow-sm">
+            {VERSION_LABEL}
+          </span>
+        }
+        userSlot={<LogoutButton />}
+      >
         {children}
       </SynertiaShell>
       {pathname !== '/login' && <ChatDock />}

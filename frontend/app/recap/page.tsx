@@ -95,6 +95,11 @@ export default function RecapPage() {
           <div>
             <h1 className="text-2xl font-semibold text-ink-900">Recap semanal — coordenadores</h1>
             <p className="text-ink-400 mt-1">
+              Análise de desempenho e métricas financeiras da semana. Monitorize
+              os contratos celebrados, os novos processos criados e o volume
+              total do pipeline distribuído por fases.
+            </p>
+            <p className="text-xs text-ink-400 mt-1">
               {data.loja} · período de <strong>{isoToPt(data.week_start)}</strong> a <strong>{isoToPt(data.week_end)}</strong>
             </p>
           </div>

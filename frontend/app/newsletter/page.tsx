@@ -138,8 +138,9 @@ export default function NewsletterPage() {
       <div>
         <h1 className="text-2xl font-semibold text-ink-900">Newsletter</h1>
         <p className="text-ink-400 mt-1">
-          Geração assistida por IA com foco em literacia financeira. O envio é feito por WhatsApp,
-          com link para a newsletter na íntegra.
+          Gere conteúdos de literacia financeira com o apoio de Inteligência
+          Artificial. Escolha um tema de mercado ou faça o upload de um ficheiro
+          para envio rápido via WhatsApp.
         </p>
       </div>
 
