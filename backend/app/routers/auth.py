@@ -48,7 +48,7 @@ def _db_user(username: str) -> dict | None:
         res = (
             supabase()
             .table("platform_users")
-            .select("username, nome, password_hash, password_salt, is_active")
+            .select("id, username, nome, role, password_hash, password_salt, is_active")
             .eq("username", username)
             .eq("is_active", True)
             .limit(1)
@@ -160,4 +160,13 @@ def me(request: Request):
     # Prefer the DB display name; fall back to the static map, then the username.
     row = _db_user(user)
     nome = (row.get("nome") if row else None) or DISPLAY_NAMES.get(user, user)
-    return {"authenticated": True, "username": user, "nome": nome}
+    # role drives what the frontend shows (user management UI, loja tab). Env-only
+    # admin logins (ds/amin) have no DB row → treated as diretor_loja (loja-wide).
+    role = (row.get("role") if row else None) or "diretor_loja"
+    return {
+        "authenticated": True,
+        "username": user,
+        "nome": nome,
+        "role": role,
+        "user_id": (row.get("id") if row else None),
+    }

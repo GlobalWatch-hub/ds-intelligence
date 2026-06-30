@@ -3,8 +3,22 @@ import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { api } from '../../lib/api';
 
-type User = { id: number; username: string; nome: string | null; role: string; is_active: boolean };
-type Account = { id: number; username: string; nome: string | null; telefone: string | null; email: string | null; role: string };
+type Role = 'diretor_loja' | 'diretor_comercial' | 'comercial';
+type UserRow = { id: number; username: string; nome: string | null; role: Role; manager_id: number | null; is_active: boolean };
+type Acting = { id: number | null; role: Role };
+type UsersResp = { users: UserRow[]; acting: Acting };
+type Manager = { crm_id: number; nome: string | null };
+type UserFull = {
+  id: number; username: string; nome: string | null; telefone: string | null; email: string | null;
+  role: Role; manager_id: number | null; manager_crm_id: number | null;
+  crm_username: string | null; crm_password_set: boolean;
+};
+
+const ROLE_LABEL: Record<Role, string> = {
+  diretor_loja: 'Diretor de Loja',
+  diretor_comercial: 'Diretor Comercial',
+  comercial: 'Comercial',
+};
 
 function Field({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
@@ -18,279 +32,266 @@ function Field({ label, ...props }: { label: string } & React.InputHTMLAttribute
   );
 }
 
-// ---- Conta tab -----------------------------------------------------------
-function ContaTab({ userId }: { userId: number }) {
-  const { data, mutate } = useSWR<Account>(`/api/settings/users/${userId}/account`, api);
-  const [form, setForm] = useState({ username: '', nome: '', telefone: '', email: '', password: '' });
+function Select({ label, children, ...props }: { label: string; children: React.ReactNode } & React.SelectHTMLAttributes<HTMLSelectElement>) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium text-ink-500">{label}</span>
+      <select
+        {...props}
+        className="w-full rounded-lg border border-ink-200 bg-white px-3 py-2 text-sm text-ink-900 focus:border-[color:var(--accent)] focus:outline-none focus:ring-1 focus:ring-[color:var(--accent)]"
+      >
+        {children}
+      </select>
+    </label>
+  );
+}
+
+// ---- User create/edit form ----------------------------------------------
+function UserForm({
+  mode, userId, acting, users, managers, onSaved, onCancel,
+}: {
+  mode: 'create' | 'edit';
+  userId: number | null;
+  acting: Acting;
+  users: UserRow[];
+  managers: Manager[];
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const { data: full } = useSWR<UserFull>(mode === 'edit' && userId ? `/api/settings/users/${userId}` : null, api);
+  const lojaDir = acting.role === 'diretor_loja';
+  const [f, setF] = useState({
+    username: '', password: '', nome: '', telefone: '', email: '',
+    role: (lojaDir ? 'comercial' : 'comercial') as Role,
+    manager_id: '' as string, manager_crm_id: '' as string,
+    crm_username: '', crm_password: '',
+  });
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (data) setForm({ username: data.username ?? '', nome: data.nome ?? '', telefone: data.telefone ?? '', email: data.email ?? '', password: '' });
-  }, [data]);
+    if (mode === 'edit' && full) {
+      setF({
+        username: full.username ?? '', password: '', nome: full.nome ?? '', telefone: full.telefone ?? '', email: full.email ?? '',
+        role: full.role, manager_id: full.manager_id?.toString() ?? '', manager_crm_id: full.manager_crm_id?.toString() ?? '',
+        crm_username: full.crm_username ?? '', crm_password: '',
+      });
+    }
+  }, [mode, full]);
+
+  const diretores = users.filter((u) => u.role === 'diretor_comercial');
+  const roleOptions: Role[] = lojaDir ? ['diretor_comercial', 'comercial'] : ['comercial'];
+  const isComercial = f.role === 'comercial';
+  const isDiretorComercial = f.role === 'diretor_comercial';
 
   async function save() {
-    setBusy(true);
-    setMsg(null);
+    setBusy(true); setMsg(null);
+    const body: any = {
+      username: f.username, nome: f.nome, telefone: f.telefone, email: f.email,
+      role: f.role,
+      manager_id: f.manager_id ? Number(f.manager_id) : null,
+      manager_crm_id: isComercial && f.manager_crm_id ? Number(f.manager_crm_id) : null,
+      crm_username: isDiretorComercial ? f.crm_username : null,
+    };
+    if (f.password) body.password = f.password;
+    if (isDiretorComercial && f.crm_password) body.crm_password = f.crm_password;
     try {
-      await api(`/api/settings/users/${userId}/account`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          username: form.username,
-          nome: form.nome,
-          telefone: form.telefone,
-          email: form.email,
-          password: form.password || null,
-        }),
-      });
-      setMsg('✓ Conta atualizada.');
-      setForm((f) => ({ ...f, password: '' }));
-      mutate();
+      if (mode === 'create') {
+        if (!f.password) { setMsg('Palavra-passe obrigatória.'); setBusy(false); return; }
+        await api('/api/settings/users', { method: 'POST', body: JSON.stringify(body) });
+      } else {
+        await api(`/api/settings/users/${userId}`, { method: 'PUT', body: JSON.stringify(body) });
+      }
+      setMsg('✓ Guardado.');
+      onSaved();
     } catch (e: any) {
       setMsg(`Erro: ${e.message}`);
-    } finally {
-      setBusy(false);
-    }
+    } finally { setBusy(false); }
   }
 
-  if (!data) return <p className="text-sm text-ink-400">A carregar …</p>;
+  if (mode === 'edit' && !full) return <p className="text-sm text-ink-400">A carregar …</p>;
+
   return (
     <div className="max-w-md space-y-4">
-      <Field label="Utilizador (username de acesso)" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoComplete="off" />
-      <Field label="Nome" value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
-      <Field label="Telemóvel" value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} />
-      <Field label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-      <Field
-        label="Palavra-passe (deixar vazio para manter)"
-        type="password"
-        autoComplete="new-password"
-        placeholder="••••••••"
-        value={form.password}
-        onChange={(e) => setForm({ ...form, password: e.target.value })}
-      />
-      <div className="flex items-center gap-3">
-        <button onClick={save} disabled={busy} className="btn-primary">
-          {busy ? 'A guardar …' : 'Guardar'}
-        </button>
-        {msg && <span className="text-sm text-ink-500">{msg}</span>}
-      </div>
-    </div>
-  );
-}
+      <h3 className="text-sm font-semibold text-ink-900">{mode === 'create' ? 'Novo utilizador' : 'Editar utilizador'}</h3>
+      <Field label="Utilizador (username de acesso)" value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} autoComplete="off" />
+      <Field label={mode === 'create' ? 'Palavra-passe' : 'Palavra-passe (vazio = manter)'} type="password" autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} />
+      <Field label="Nome" value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} />
+      <Field label="Telemóvel" value={f.telefone} onChange={(e) => setF({ ...f, telefone: e.target.value })} />
+      <Field label="Email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
 
-// ---- Definições tab (CRM creds, PIN-gated) -------------------------------
-function DefinicoesTab({ userId, pin, setPin }: { userId: number; pin: string | null; setPin: (p: string | null) => void }) {
-  const [pinInput, setPinInput] = useState('');
-  const [pinErr, setPinErr] = useState<string | null>(null);
-  const [unlocking, setUnlocking] = useState(false);
+      {lojaDir ? (
+        <Select label="Perfil" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as Role })}>
+          {roleOptions.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+        </Select>
+      ) : (
+        <p className="text-xs text-ink-500">Perfil: <span className="font-medium">Comercial</span></p>
+      )}
 
-  async function unlock() {
-    setUnlocking(true);
-    setPinErr(null);
-    try {
-      await api('/api/settings/service/unlock', { method: 'POST', body: JSON.stringify({ pin: pinInput }) });
-      setPin(pinInput);
-    } catch {
-      setPinErr('PIN de serviço inválido.');
-    } finally {
-      setUnlocking(false);
-    }
-  }
+      {isComercial && (
+        <>
+          <Select label="Gestor no CRM (define os processos que vê)" value={f.manager_crm_id} onChange={(e) => setF({ ...f, manager_crm_id: e.target.value })}>
+            <option value="">— selecionar —</option>
+            {managers.map((m) => <option key={m.crm_id} value={m.crm_id}>{m.nome ?? m.crm_id}</option>)}
+          </Select>
+          {lojaDir && (
+            <Select label="Diretor Comercial (equipa)" value={f.manager_id} onChange={(e) => setF({ ...f, manager_id: e.target.value })}>
+              <option value="">— sem equipa —</option>
+              {diretores.map((d) => <option key={d.id} value={d.id}>{d.nome ?? d.username}</option>)}
+            </Select>
+          )}
+        </>
+      )}
 
-  if (!pin) {
-    return (
-      <div className="max-w-sm space-y-4">
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Acesso de serviço. Esta secção contém as credenciais de acesso ao CRM e só
-          abre com o PIN de serviço.
+      {isDiretorComercial && (
+        <div className="space-y-3 rounded-lg border border-ink-200 bg-ink-50/50 p-3">
+          <p className="text-xs font-medium text-ink-600">Credenciais CRM (para ingerir a equipa deste diretor)</p>
+          <Field label="Utilizador CRM (email)" value={f.crm_username} onChange={(e) => setF({ ...f, crm_username: e.target.value })} autoComplete="off" />
+          <Field label={full?.crm_password_set ? 'Palavra-passe CRM (definida — vazio = manter)' : 'Palavra-passe CRM'} type="password" autoComplete="new-password" value={f.crm_password} onChange={(e) => setF({ ...f, crm_password: e.target.value })} />
         </div>
-        <Field
-          label="PIN de serviço"
-          type="password"
-          inputMode="numeric"
-          placeholder="••••••"
-          value={pinInput}
-          onChange={(e) => setPinInput(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && unlock()}
-        />
-        {pinErr && <p className="text-sm text-ds-700">{pinErr}</p>}
-        <button onClick={unlock} disabled={unlocking || !pinInput} className="btn-primary">
-          {unlocking ? 'A validar …' : 'Desbloquear'}
-        </button>
+      )}
+
+      <div className="flex items-center gap-3">
+        <button onClick={save} disabled={busy} className="btn-primary">{busy ? 'A guardar …' : 'Guardar'}</button>
+        <button onClick={onCancel} className="btn-ghost">Cancelar</button>
+        {msg && <span className="text-sm text-ink-500">{msg}</span>}
       </div>
-    );
-  }
-  return <CrmForm userId={userId} pin={pin} onLock={() => setPin(null)} />;
+    </div>
+  );
 }
 
-function CrmForm({ userId, pin, onLock }: { userId: number; pin: string; onLock: () => void }) {
-  const headers = { 'X-Service-Pin': pin };
-  const { data, mutate } = useSWR<{ crm_username: string | null; crm_password_set: boolean; acesso_loja_toda: boolean }>(
-    [`/api/settings/users/${userId}/crm`, pin],
-    ([path]) => api(path as string, { headers }),
-  );
-  const [crmUser, setCrmUser] = useState('');
-  const [crmPass, setCrmPass] = useState('');
-  const [msg, setMsg] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [lojaBusy, setLojaBusy] = useState(false);
+// ---- Utilizadores tab ----------------------------------------------------
+function UtilizadoresTab() {
+  const { data, mutate } = useSWR<UsersResp>('/api/settings/users', api);
+  const { data: mgrs } = useSWR<{ managers: Manager[] }>('/api/settings/managers', api);
+  const [sel, setSel] = useState<number | 'new' | null>(null);
+  const users = data?.users ?? [];
+  const acting = data?.acting;
+  const managers = mgrs?.managers ?? [];
 
-  useEffect(() => {
-    if (data) setCrmUser(data.crm_username ?? '');
-  }, [data]);
+  const canCreate = acting && (acting.role === 'diretor_loja' || acting.role === 'diretor_comercial');
+  const selUser = typeof sel === 'number' ? users.find((u) => u.id === sel) : undefined;
+  const canDelete = !!(acting && selUser && selUser.id !== acting.id &&
+    (acting.role === 'diretor_loja' ? selUser.role !== 'diretor_loja' : selUser.manager_id === acting.id));
 
-  async function toggleLojaToda(value: boolean) {
-    setLojaBusy(true);
-    setMsg(null);
+  async function del() {
+    if (!selUser) return;
+    if (!confirm(`Apagar o utilizador "${selUser.nome ?? selUser.username}"?`)) return;
     try {
-      await api(`/api/settings/users/${userId}/loja-toda`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ acesso_loja_toda: value }),
-      });
-      mutate();
-    } catch (e: any) {
-      setMsg(`Erro: ${e.message}`);
-    } finally {
-      setLojaBusy(false);
-    }
+      await api(`/api/settings/users/${selUser.id}`, { method: 'DELETE' });
+      setSel(null); mutate();
+    } catch (e: any) { alert(e.message); }
   }
 
+  return (
+    <div className="grid gap-6 md:grid-cols-[240px_1fr]">
+      <nav className="space-y-1">
+        <div className="flex items-center justify-between px-1 pb-1">
+          <span className="text-xs font-semibold uppercase tracking-wider text-ink-400">Utilizadores</span>
+          {canCreate && (
+            <button onClick={() => setSel('new')} className="rounded-md bg-[color:var(--accent)] px-2 py-0.5 text-xs font-medium text-white">+ Adicionar</button>
+          )}
+        </div>
+        {users.map((u) => (
+          <button
+            key={u.id}
+            onClick={() => setSel(u.id)}
+            className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm ${sel === u.id ? 'bg-ink-100 font-medium text-ink-900' : 'text-ink-600 hover:bg-ink-50'}`}
+          >
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-200 text-xs font-semibold text-ink-700">
+              {(u.nome ?? u.username).split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
+            </span>
+            <span className="min-w-0">
+              <span className="block truncate">{u.nome ?? u.username}</span>
+              <span className="block truncate text-[11px] text-ink-400">{ROLE_LABEL[u.role]}</span>
+            </span>
+          </button>
+        ))}
+        {!users.length && <p className="px-3 text-sm text-ink-400">Sem utilizadores.</p>}
+      </nav>
+
+      <section className="card">
+        {sel === null && <p className="text-sm text-ink-400">Selecione um utilizador ou adicione um novo.</p>}
+        {sel === 'new' && acting && (
+          <UserForm mode="create" userId={null} acting={acting} users={users} managers={managers}
+            onSaved={() => { setSel(null); mutate(); }} onCancel={() => setSel(null)} />
+        )}
+        {typeof sel === 'number' && acting && (
+          <div className="space-y-4">
+            <UserForm mode="edit" userId={sel} acting={acting} users={users} managers={managers}
+              onSaved={() => mutate()} onCancel={() => setSel(null)} />
+            {canDelete && (
+              <div className="border-t border-ink-100 pt-4">
+                <button onClick={del} className="rounded-lg border border-ds-200 px-3 py-1.5 text-sm text-ds-700 hover:bg-ds-50">Apagar utilizador</button>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+// ---- Loja tab ------------------------------------------------------------
+function LojaTab({ actingRole }: { actingRole: Role | undefined }) {
+  const { data, mutate } = useSWR<{ numero: string | null; nome: string | null }>('/api/settings/loja', api);
+  const [f, setF] = useState({ numero: '', nome: '' });
+  const [msg, setMsg] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const canEdit = actingRole === 'diretor_loja';
+
+  useEffect(() => { if (data) setF({ numero: data.numero ?? '', nome: data.nome ?? '' }); }, [data]);
+
   async function save() {
-    setBusy(true);
-    setMsg(null);
+    setBusy(true); setMsg(null);
     try {
-      await api(`/api/settings/users/${userId}/crm`, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify({ crm_username: crmUser, crm_password: crmPass || null }),
-      });
-      setMsg('✓ Credenciais CRM guardadas.');
-      setCrmPass('');
-      mutate();
-    } catch (e: any) {
-      setMsg(`Erro: ${e.message}`);
-    } finally {
-      setBusy(false);
-    }
+      await api('/api/settings/loja', { method: 'PUT', body: JSON.stringify(f) });
+      setMsg('✓ Loja atualizada.'); mutate();
+    } catch (e: any) { setMsg(`Erro: ${e.message}`); } finally { setBusy(false); }
   }
 
   if (!data) return <p className="text-sm text-ink-400">A carregar …</p>;
   return (
-    <div className="max-w-md space-y-4">
-      <div className="flex items-center justify-between">
-        <span className="chip">Acesso de serviço ativo</span>
-        <button onClick={onLock} className="text-xs text-ink-400 hover:text-ink-600">
-          Bloquear
-        </button>
-      </div>
-      <Field label="Utilizador CRM (email)" value={crmUser} onChange={(e) => setCrmUser(e.target.value)} autoComplete="off" />
-      <Field
-        label={`Palavra-passe CRM ${data.crm_password_set ? '(definida — deixar vazio para manter)' : '(não definida)'}`}
-        type="password"
-        autoComplete="new-password"
-        placeholder={data.crm_password_set ? '••••••••' : 'Introduzir palavra-passe'}
-        value={crmPass}
-        onChange={(e) => setCrmPass(e.target.value)}
-      />
-      <div className="flex items-center gap-3">
-        <button onClick={save} disabled={busy} className="btn-primary">
-          {busy ? 'A guardar …' : 'Guardar'}
-        </button>
-        {msg && <span className="text-sm text-ink-500">{msg}</span>}
-      </div>
-
-      <label className="flex items-start gap-3 rounded-lg border border-ink-200 bg-ink-50/50 px-3 py-3">
-        <input
-          type="checkbox"
-          className="mt-0.5 h-4 w-4 accent-[color:var(--accent)]"
-          checked={!!data.acesso_loja_toda}
-          disabled={lojaBusy}
-          onChange={(e) => toggleLojaToda(e.target.checked)}
-        />
-        <span className="text-sm">
-          <span className="font-medium text-ink-900">Acesso Loja Toda</span>
-          <span className="block text-xs text-ink-500">
-            Quando ligado, este utilizador vê os processos e leads de toda a loja, em vez de
-            apenas os da sua conta CRM. {lojaBusy && '(a guardar …)'}
-          </span>
-        </span>
-      </label>
-    </div>
+    <section className="card max-w-md space-y-4">
+      <Field label="Número da loja" value={f.numero} onChange={(e) => setF({ ...f, numero: e.target.value })} disabled={!canEdit} />
+      <Field label="Nome da loja (aparece no cabeçalho)" value={f.nome} onChange={(e) => setF({ ...f, nome: e.target.value })} disabled={!canEdit} />
+      {canEdit ? (
+        <div className="flex items-center gap-3">
+          <button onClick={save} disabled={busy} className="btn-primary">{busy ? 'A guardar …' : 'Guardar'}</button>
+          {msg && <span className="text-sm text-ink-500">{msg}</span>}
+        </div>
+      ) : (
+        <p className="text-xs text-ink-400">Só o Diretor de Loja pode alterar a loja.</p>
+      )}
+    </section>
   );
 }
 
 // ---- Page ----------------------------------------------------------------
 export default function ConfiguracoesPage() {
-  const { data } = useSWR<{ users: User[] }>('/api/settings/users', api);
-  const users = data?.users ?? [];
-  const [selected, setSelected] = useState<number | null>(null);
-  const [tab, setTab] = useState<'conta' | 'definicoes'>('conta');
-  // Service PIN is global; once validated we keep it for any user in this session.
-  const [pin, setPin] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (selected === null && users.length) setSelected(users[0].id);
-  }, [users, selected]);
+  const { data: me } = useSWR<{ role: Role }>('/api/auth/me', api);
+  const [tab, setTab] = useState<'utilizadores' | 'loja'>('utilizadores');
 
   return (
     <div className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold text-ink-900">Configurações</h1>
-        <p className="text-sm text-ink-400">Utilizadores da plataforma e credenciais de acesso.</p>
+        <p className="text-sm text-ink-400">Utilizadores, perfis e dados da loja.</p>
       </header>
 
-      <div className="grid gap-6 md:grid-cols-[220px_1fr]">
-        {/* Utilizadores */}
-        <nav className="space-y-1">
-          <p className="px-1 pb-1 text-xs font-semibold uppercase tracking-wider text-ink-400">Utilizadores</p>
-          {users.map((u) => (
-            <button
-              key={u.id}
-              onClick={() => setSelected(u.id)}
-              className={`flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm ${
-                selected === u.id ? 'bg-ink-100 font-medium text-ink-900' : 'text-ink-600 hover:bg-ink-50'
-              }`}
-            >
-              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-200 text-xs font-semibold text-ink-700">
-                {(u.nome ?? u.username).split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase()}
-              </span>
-              <span className="truncate">{u.nome ?? u.username}</span>
-            </button>
-          ))}
-          {!users.length && <p className="px-3 text-sm text-ink-400">Sem utilizadores.</p>}
-        </nav>
-
-        {/* Detalhe */}
-        <section className="card">
-          {selected === null ? (
-            <p className="text-sm text-ink-400">Selecione um utilizador.</p>
-          ) : (
-            <>
-              <div className="mb-5 flex gap-2 border-b border-ink-100">
-                {(['conta', 'definicoes'] as const).map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => setTab(t)}
-                    className={`-mb-px border-b-2 px-3 py-2 text-sm ${
-                      tab === t
-                        ? 'border-[color:var(--accent)] font-medium text-ink-900'
-                        : 'border-transparent text-ink-500 hover:text-ink-700'
-                    }`}
-                  >
-                    {t === 'conta' ? 'Conta' : 'Definições'}
-                  </button>
-                ))}
-              </div>
-              {tab === 'conta' ? (
-                <ContaTab userId={selected} />
-              ) : (
-                <DefinicoesTab userId={selected} pin={pin} setPin={setPin} />
-              )}
-            </>
-          )}
-        </section>
+      <div className="flex gap-2 border-b border-ink-100">
+        {(['utilizadores', 'loja'] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === t ? 'border-[color:var(--accent)] font-medium text-ink-900' : 'border-transparent text-ink-500 hover:text-ink-700'}`}
+          >
+            {t === 'utilizadores' ? 'Utilizadores' : 'Loja'}
+          </button>
+        ))}
       </div>
+
+      {tab === 'utilizadores' ? <UtilizadoresTab /> : <LojaTab actingRole={me?.role} />}
     </div>
   );
 }

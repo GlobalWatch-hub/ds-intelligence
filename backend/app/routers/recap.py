@@ -14,7 +14,7 @@ from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Request
 
 from ..config import settings
-from ..core.scope import account_filter
+from ..core.scope import user_scope, apply_scope
 from ..db import supabase
 
 router = APIRouter()
@@ -25,13 +25,11 @@ LOST_STATES = ("Anulado", "Perdido")
 OPEN_EXCLUDE_STATES = ("Ganho", "Anulado", "Perdido")
 
 
-def _select_all(sb, table: str, columns: str, page_size: int = 1000, *, account: str | None = None) -> list[dict]:
+def _select_all(sb, table: str, columns: str, page_size: int = 1000, *, scope: dict | None = None) -> list[dict]:
     rows: list[dict] = []
     offset = 0
     while True:
-        q = sb.table(table).select(columns)
-        if account is not None:
-            q = q.contains("source_accounts", [account])
+        q = apply_scope(sb.table(table).select(columns), scope)
         chunk = q.range(offset, offset + page_size - 1).execute().data or []
         rows.extend(chunk)
         if len(chunk) < page_size:
@@ -84,18 +82,18 @@ def weekly_recap(
     week_end_dt = datetime.combine(friday + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
 
     sb = supabase()
-    acct = account_filter(request)  # None for coordenador/admin (loja-wide); else this gestor
+    scope = user_scope(request)  # None for diretor_loja/admin (loja-wide); else this user
     processos = _select_all(
         sb, "processos_real",
         "crm_id, reference, customer_name, customer_telephone, manager_name, "
         "state_id, state_name, type_name, financing_amount, commission_amount, "
         "docs_mandatory, docs_uploaded, docs_validated, created_on_crm, updated_on_crm, archived",
-        account=acct,
+        scope=scope,
     )
     leads = _select_all(
         sb, "leads_real",
         "crm_id, name, type_full_name, state_name, origin_name, updated_on_crm",
-        account=acct,
+        scope=scope,
     )
 
     # ----- this week's transitions -----

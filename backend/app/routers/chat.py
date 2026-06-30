@@ -20,7 +20,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ..config import settings
-from ..core.scope import account_filter
+from ..core.scope import user_scope, apply_scope
 from ..db import supabase
 
 router = APIRouter()
@@ -93,13 +93,11 @@ RULES:
 - Keep replies under 200 words unless explicitly asked for more detail."""
 
 
-def _select_all(sb, table: str, columns: str, page_size: int = 1000, *, account: str | None = None) -> list[dict]:
+def _select_all(sb, table: str, columns: str, page_size: int = 1000, *, scope: dict | None = None) -> list[dict]:
     rows: list[dict] = []
     offset = 0
     while True:
-        q = sb.table(table).select(columns)
-        if account is not None:
-            q = q.contains("source_accounts", [account])
+        q = apply_scope(sb.table(table).select(columns), scope)
         chunk = q.range(offset, offset + page_size - 1).execute().data or []
         rows.extend(chunk)
         if len(chunk) < page_size:
@@ -156,19 +154,19 @@ def _upcoming_birthday(dob: str | None, today: date, until: date) -> bool:
     return today <= by <= until
 
 
-def _crm_snapshot(account: str | None = None) -> dict:
+def _crm_snapshot(scope: dict | None = None) -> dict:
     sb = supabase()
     today = date.today()
     in_7d = today + timedelta(days=7)
 
-    # LIVE — processos for the logged-in gestor's account (loja-wide for admin)
+    # LIVE — processos for the logged-in user's profile (loja-wide for diretor_loja)
     processos = _select_all(
         sb, "processos_real",
         "crm_id, reference, customer_crm_id, customer_name, customer_tax_number, "
         "customer_telephone, manager_name, state_name, type_name, financing_amount, "
         "commission_amount, docs_mandatory, docs_uploaded, docs_validated, "
         "created_on_crm, updated_on_crm",
-        account=account,
+        scope=scope,
     )
     processos_trim = [_trim_processo(p) for p in processos]
 
@@ -192,12 +190,12 @@ def _crm_snapshot(account: str | None = None) -> dict:
     # LIVE — consultores from the processos manager_name distinct
     consultores = sorted({p.get("manager_name") for p in processos if p.get("manager_name")})
 
-    # LIVE — leads for the logged-in gestor's account (loja-wide for admin)
+    # LIVE — leads for the logged-in user's profile (loja-wide for diretor_loja)
     leads_all = _select_all(
         sb, "leads_real",
         "crm_id, name, telephone, type_full_name, state_name, origin_name, "
         "financing_amount, manager_name, created_on_crm, updated_on_crm",
-        account=account,
+        scope=scope,
     )
     leads_trim = [
         {
@@ -292,7 +290,7 @@ def ask(body: ChatBody, request: Request):
     if not settings.ANTHROPIC_API_KEY:
         raise HTTPException(500, "ANTHROPIC_API_KEY not configured")
 
-    snapshot = _crm_snapshot(account_filter(request))
+    snapshot = _crm_snapshot(user_scope(request))
     snapshot_json = json.dumps(snapshot, ensure_ascii=False, default=str)
 
     messages = []

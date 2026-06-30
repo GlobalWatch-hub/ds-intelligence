@@ -1,4 +1,5 @@
 'use client';
+import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import {
   SynertiaShell,
@@ -41,10 +42,20 @@ const config: SynertiaConfig = {
 
 export default function AppChrome({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  // Nome da loja (configurável na tab Loja) escreve no cabeçalho; cai no default
+  // do config enquanto não carrega.
+  const [lojaNome, setLojaNome] = useState<string | null>(null);
+  useEffect(() => {
+    fetch('/api/settings/loja')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.nome) setLojaNome(d.nome); })
+      .catch(() => {});
+  }, []);
+  const cfg: SynertiaConfig = { ...config, clientName: lojaNome ?? config.clientName };
   return (
     <>
       <SynertiaShell
-        config={config}
+        config={cfg}
         brandSlot={
           <span className="inline-block rounded-full border border-white/15 bg-white/10 px-2 py-0.5 text-[9px] font-semibold tracking-wider text-white/70 shadow-sm">
             {VERSION_LABEL}

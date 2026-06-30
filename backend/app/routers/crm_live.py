@@ -6,7 +6,7 @@ from datetime import date
 from fastapi import APIRouter, Query, Request
 
 from ..core.names import fix_name
-from ..core.scope import account_filter
+from ..core.scope import user_scope, apply_scope
 from ..db import supabase
 
 router = APIRouter()
@@ -33,16 +33,17 @@ def _age_from_dob(dob: str | None) -> int | None:
     return today.year - d.year - ((today.month, today.day) < (d.month, d.day))
 
 
-def _process_info_map(sb, account: str | None = None) -> dict[int, dict]:
+def _process_info_map(sb, scope: dict | None = None) -> dict[int, dict]:
     """Latest process per customer (item 13 + tipo): state_name and type_name,
     keyed by customer_crm_id = clientes_real.crm_id, keeping the most recently
-    updated process. Scoped to the logged-in gestor's account (loja-wide for
-    admin); clients with no visible process render as '—'."""
-    q = sb.table("processos_real").select(
-        "customer_crm_id, state_name, type_name, updated_on_crm, created_on_crm"
+    updated process. Scoped to the logged-in user's profile (loja-wide for
+    diretor_loja); clients with no visible process render as '—'."""
+    q = apply_scope(
+        sb.table("processos_real").select(
+            "customer_crm_id, state_name, type_name, updated_on_crm, created_on_crm"
+        ),
+        scope,
     )
-    if account is not None:
-        q = q.contains("source_accounts", [account])
     rows = q.execute().data or []
     latest: dict[int, tuple[str, dict]] = {}  # cid -> (sort_key, {estado, tipo})
     for r in rows:
@@ -98,12 +99,10 @@ def list_filter_options(request: Request):
     CRM-live view (items 10 + 13). Process states/types reflect the logged-in
     gestor's scope; the gestor (manager) list stays loja-wide."""
     sb = supabase()
-    acct = account_filter(request)
+    scope = user_scope(request)
     clientes = _select_all(sb, "manager_name:raw->>managerName")
     managers = sorted({fix_name(c.get("manager_name")) for c in clientes if c.get("manager_name")})
-    pq = sb.table("processos_real").select("state_name, type_name")
-    if acct is not None:
-        pq = pq.contains("source_accounts", [acct])
+    pq = apply_scope(sb.table("processos_real").select("state_name, type_name"), scope)
     proc = pq.execute().data or []
     estados = sorted({p.get("state_name") for p in proc if p.get("state_name")})
     tipos = sorted({p.get("type_name") for p in proc if p.get("type_name")})
@@ -122,7 +121,7 @@ def list_customers(
     offset: int = Query(0, ge=0),
 ):
     sb = supabase()
-    proc_map = _process_info_map(sb, account_filter(request))
+    proc_map = _process_info_map(sb, user_scope(request))
 
     q = (q or "").strip()
     manager = (manager or "").strip()

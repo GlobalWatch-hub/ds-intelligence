@@ -16,7 +16,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ..config import settings
-from ..core.scope import account_filter
+from ..core.scope import user_scope, apply_scope
 from ..core.wa_client import send_text, is_demo_recipient
 from ..db import supabase
 
@@ -140,13 +140,11 @@ def _birthday_in_range(dob: date | None, lo: date, hi: date) -> date | None:
     return None
 
 
-def _select_all(sb, table: str, columns: str, page_size: int = 1000, *, account: str | None = None) -> list[dict]:
+def _select_all(sb, table: str, columns: str, page_size: int = 1000, *, scope: dict | None = None) -> list[dict]:
     rows: list[dict] = []
     offset = 0
     while True:
-        q = sb.table(table).select(columns)
-        if account is not None:
-            q = q.contains("source_accounts", [account])
+        q = apply_scope(sb.table(table).select(columns), scope)
         chunk = q.range(offset, offset + page_size - 1).execute().data or []
         rows.extend(chunk)
         if len(chunk) < page_size:
@@ -235,7 +233,7 @@ def list_trigger_rows(
 ):
     sb = supabase()
     today = _today()
-    acct = account_filter(request)  # scope processos/leads to the logged-in gestor
+    scope = user_scope(request)  # scope processos/leads to the logged-in user's profile
     rng_lo = _parse(date_from)
     rng_hi = _parse(date_to)
     has_range = rng_lo is not None and rng_hi is not None
@@ -369,7 +367,7 @@ def list_trigger_rows(
             "crm_id, customer_crm_id, customer_name, customer_telephone, "
             "state_id, state_name, docs_mandatory, docs_uploaded, docs_validated, "
             "updated_on_crm, type_name",
-            account=acct,
+            scope=scope,
         )
         d_minus_7 = today - timedelta(days=7)
 
@@ -437,7 +435,7 @@ def list_trigger_rows(
             sb, "leads_real",
             "crm_id, name, telephone, type_full_name, state_name, origin_name, "
             "manager_name, updated_on_crm, created_on_crm",
-            account=acct,
+            scope=scope,
         )
         out = []
         thirty_days_ago = today - timedelta(days=30)

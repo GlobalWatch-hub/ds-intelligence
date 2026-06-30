@@ -1,40 +1,79 @@
-"""Settings / Utilizadores — manage platform accounts and per-user CRM creds.
+"""Settings — user management (CRUD) by profile + loja config.
 
-All routes sit behind the global session gate (see main.py middleware). Two
-trust tiers:
+Profiles (platform_users.role):
+  diretor_loja      — manages any diretor_comercial / comercial in the loja; sees
+                      the whole loja's data.
+  diretor_comercial — manages only their own team (comerciais with manager_id ==
+                      them); sees own + team (their CRM account's view).
+  comercial         — no user management; sees only their own processos.
 
-  * "Conta" data (nome, telefone, email, palavra-passe) — any authenticated
-    session may read/edit (phase-1 simplification; the data views aren't yet
-    scoped per user).
-
-  * "Definições" / CRM credentials — gated additionally by the global service
-    PIN (APP_SERVICE_PIN), sent in the `X-Service-Pin` header and checked in
-    constant time on EVERY read/write. The CRM password is stored encrypted and
-    never returned in clear text; reads only reveal whether one is set.
+The old service-PIN model is gone: access is governed entirely by the acting
+user's profile. All routes sit behind the global session gate (main.py).
 """
 from __future__ import annotations
 
-import hmac
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Header, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
-from ..config import settings
 from ..core.crypto import encrypt_secret, hash_password
+from ..core.names import fix_name
+from ..core.scope import apply_scope, user_scope
 from ..db import supabase
+from .auth import COOKIE_NAME, token_user
 
 router = APIRouter()
+
+VALID_ROLES = {"diretor_loja", "diretor_comercial", "comercial"}
+MANAGEABLE_ROLES = {"diretor_comercial", "comercial"}  # diretor_loja never manages another diretor_loja
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _require_pin(pin: str | None) -> None:
-    """Raise 403 unless the supplied service PIN matches APP_SERVICE_PIN."""
-    if not settings.APP_SERVICE_PIN or not pin or not hmac.compare_digest(pin, settings.APP_SERVICE_PIN):
-        raise HTTPException(403, "PIN de serviço inválido.")
+# ---- acting user + permissions ------------------------------------------
+def _acting_user(request: Request) -> dict:
+    """The logged-in user as {id, username, role, manager_id}. Env-only admin
+    logins (ds/amin, no platform_users row) act as diretor_loja."""
+    username = token_user(request.cookies.get(COOKIE_NAME))
+    row = None
+    if username:
+        try:
+            row = (
+                supabase()
+                .table("platform_users")
+                .select("id, username, role, manager_id, is_active")
+                .eq("username", username)
+                .eq("is_active", True)
+                .limit(1)
+                .execute()
+                .data
+                or [None]
+            )[0]
+        except Exception:
+            row = None
+    if not row:
+        return {"id": None, "username": username, "role": "diretor_loja", "manager_id": None}
+    return row
+
+
+def _can_manage(acting: dict, target: dict) -> bool:
+    """Whether `acting` may edit/delete `target`."""
+    if acting["role"] == "diretor_loja":
+        return (target.get("role") or "comercial") in MANAGEABLE_ROLES
+    if acting["role"] == "diretor_comercial":
+        return target.get("role") == "comercial" and target.get("manager_id") == acting["id"]
+    return False
+
+
+def _can_create(acting: dict, role: str) -> bool:
+    if acting["role"] == "diretor_loja":
+        return role in MANAGEABLE_ROLES
+    if acting["role"] == "diretor_comercial":
+        return role == "comercial"
+    return False
 
 
 def _get_user_or_404(sb, user_id: int, columns: str) -> dict:
@@ -45,124 +84,208 @@ def _get_user_or_404(sb, user_id: int, columns: str) -> dict:
     return row
 
 
+def _username_taken(sb, username: str, exclude_id: int | None = None) -> bool:
+    q = sb.table("platform_users").select("id").eq("username", username)
+    if exclude_id is not None:
+        q = q.neq("id", exclude_id)
+    return bool(q.limit(1).execute().data)
+
+
+# ---- list / read ---------------------------------------------------------
 @router.get("/users")
-def list_users():
-    """List platform users for the Utilizadores screen — no secrets."""
+def list_users(request: Request):
+    """Users the acting profile may see: diretor_loja → all; diretor_comercial →
+    self + team; comercial → self."""
+    acting = _acting_user(request)
     sb = supabase()
-    rows = (
-        sb.table("platform_users")
-        .select("id, username, nome, role, is_active")
-        .order("id")
-        .execute()
-        .data
-        or []
+    q = sb.table("platform_users").select("id, username, nome, role, manager_id, is_active").order("id")
+    if acting["role"] == "diretor_comercial":
+        q = q.or_(f"id.eq.{acting['id']},manager_id.eq.{acting['id']}")
+    elif acting["role"] != "diretor_loja":
+        q = q.eq("id", acting["id"])
+    return {"users": q.execute().data or [], "acting": {"id": acting["id"], "role": acting["role"]}}
+
+
+def _shape_user(row: dict) -> dict:
+    return {
+        "id": row.get("id"),
+        "username": row.get("username"),
+        "nome": row.get("nome"),
+        "telefone": row.get("telefone"),
+        "email": row.get("email"),
+        "role": row.get("role"),
+        "manager_id": row.get("manager_id"),
+        "manager_crm_id": row.get("manager_crm_id"),
+        "crm_username": row.get("crm_username"),
+        "crm_password_set": bool(row.get("crm_password_enc")),
+    }
+
+
+@router.get("/users/{user_id}")
+def get_user(user_id: int, request: Request):
+    acting = _acting_user(request)
+    sb = supabase()
+    target = _get_user_or_404(
+        sb, user_id,
+        "id, username, nome, telefone, email, role, manager_id, manager_crm_id, crm_username, crm_password_enc",
     )
-    return {"users": rows}
+    if not (acting["id"] == target["id"] or _can_manage(acting, target)):
+        raise HTTPException(403, "Sem permissão para ver este utilizador.")
+    return _shape_user(target)
 
 
-@router.get("/users/{user_id}/account")
-def get_account(user_id: int):
-    sb = supabase()
-    return _get_user_or_404(sb, user_id, "id, username, nome, telefone, email, role")
-
-
-class AccountIn(BaseModel):
-    username: str | None = None  # editable login handle (must stay unique)
+# ---- create / update / delete -------------------------------------------
+class UserIn(BaseModel):
+    username: str | None = None
+    password: str | None = None
     nome: str | None = None
     telefone: str | None = None
     email: str | None = None
-    password: str | None = None  # optional — only re-hashed when non-empty
+    role: str | None = None
+    manager_id: int | None = None
+    manager_crm_id: int | None = None
+    crm_username: str | None = None
+    crm_password: str | None = None
 
 
-@router.put("/users/{user_id}/account")
-def update_account(user_id: int, body: AccountIn):
+@router.post("/users")
+def create_user(body: UserIn, request: Request):
+    acting = _acting_user(request)
     sb = supabase()
-    _get_user_or_404(sb, user_id, "id")
-    patch: dict = {
+    role = body.role or "comercial"
+    manager_id = body.manager_id
+    # A diretor_comercial can only spawn comerciais on their own team.
+    if acting["role"] == "diretor_comercial":
+        role = "comercial"
+        manager_id = acting["id"]
+    if role not in VALID_ROLES or not _can_create(acting, role):
+        raise HTTPException(403, "Sem permissão para criar este perfil.")
+    username = (body.username or "").strip()
+    if not username or not body.password:
+        raise HTTPException(400, "Utilizador e palavra-passe são obrigatórios.")
+    if _username_taken(sb, username):
+        raise HTTPException(409, "Esse nome de utilizador já existe.")
+    h, salt = hash_password(body.password)
+    row: dict = {
+        "username": username,
         "nome": body.nome,
         "telefone": body.telefone,
         "email": body.email,
-        "updated_at": _now(),
+        "role": role,
+        "manager_id": manager_id,
+        "manager_crm_id": body.manager_crm_id,
+        "password_hash": h,
+        "password_salt": salt,
+        "crm_username": body.crm_username,
+        "is_active": True,
     }
-    # Username is editable but must remain unique. Changing it means the user logs
-    # in with the new handle; their processo/lead scope re-tags on the next ingest
-    # (source_accounts is keyed on username).
+    if body.crm_password:
+        row["crm_password_enc"] = encrypt_secret(body.crm_password)
+    res = sb.table("platform_users").insert(row).execute()
+    return {"ok": True, "id": (res.data or [{}])[0].get("id")}
+
+
+@router.put("/users/{user_id}")
+def update_user(user_id: int, body: UserIn, request: Request):
+    acting = _acting_user(request)
+    sb = supabase()
+    target = _get_user_or_404(sb, user_id, "id, role, manager_id")
+    is_self = acting["id"] == target["id"]
+    can_manage = _can_manage(acting, target)
+    if not (is_self or can_manage):
+        raise HTTPException(403, "Sem permissão para alterar este utilizador.")
+
+    patch: dict = {"updated_at": _now()}
+    for field in ("nome", "telefone", "email"):
+        val = getattr(body, field)
+        if val is not None:
+            patch[field] = val
     if body.username:
         new_username = body.username.strip()
+        if new_username and _username_taken(sb, new_username, exclude_id=user_id):
+            raise HTTPException(409, "Esse nome de utilizador já existe.")
         if new_username:
-            clash = (
-                sb.table("platform_users")
-                .select("id")
-                .eq("username", new_username)
-                .neq("id", user_id)
-                .limit(1)
-                .execute()
-                .data
-            )
-            if clash:
-                raise HTTPException(409, "Esse nome de utilizador já existe.")
             patch["username"] = new_username
     if body.password:
         h, salt = hash_password(body.password)
         patch["password_hash"] = h
         patch["password_salt"] = salt
-    sb.table("platform_users").update(patch).eq("id", user_id).execute()
-    return {"ok": True}
-
-
-class PinIn(BaseModel):
-    pin: str
-
-
-@router.post("/service/unlock")
-def service_unlock(body: PinIn):
-    """Verify the service PIN so the UI can reveal the Definições tab. The PIN is
-    re-checked server-side on every CRM read/write regardless."""
-    _require_pin(body.pin)
-    return {"ok": True}
-
-
-@router.get("/users/{user_id}/crm")
-def get_crm(user_id: int, x_service_pin: str | None = Header(None)):
-    _require_pin(x_service_pin)
-    sb = supabase()
-    row = _get_user_or_404(sb, user_id, "id, crm_username, crm_password_enc, acesso_loja_toda")
-    return {
-        "crm_username": row.get("crm_username"),
-        "crm_password_set": bool(row.get("crm_password_enc")),
-        "acesso_loja_toda": bool(row.get("acesso_loja_toda")),
-    }
-
-
-class CrmIn(BaseModel):
-    crm_username: str | None = None
-    crm_password: str | None = None  # optional — only re-encrypted when non-empty
-
-
-@router.put("/users/{user_id}/crm")
-def update_crm(user_id: int, body: CrmIn, x_service_pin: str | None = Header(None)):
-    _require_pin(x_service_pin)
-    sb = supabase()
-    _get_user_or_404(sb, user_id, "id")
-    patch: dict = {"crm_username": body.crm_username, "updated_at": _now()}
+    # CRM creds — self or a manager.
+    if body.crm_username is not None:
+        patch["crm_username"] = body.crm_username
     if body.crm_password:
         patch["crm_password_enc"] = encrypt_secret(body.crm_password)
+    # Structural fields (role / team / CRM identity) only when managing (not self-only).
+    if can_manage:
+        if body.role and body.role != target.get("role"):
+            if body.role not in VALID_ROLES or not _can_create(acting, body.role):
+                raise HTTPException(403, "Sem permissão para atribuir esse perfil.")
+            patch["role"] = body.role
+        if body.manager_id is not None:
+            patch["manager_id"] = body.manager_id
+        if body.manager_crm_id is not None:
+            patch["manager_crm_id"] = body.manager_crm_id
+
     sb.table("platform_users").update(patch).eq("id", user_id).execute()
     return {"ok": True}
 
 
-class LojaTodaIn(BaseModel):
-    acesso_loja_toda: bool
-
-
-@router.put("/users/{user_id}/loja-toda")
-def update_loja_toda(user_id: int, body: LojaTodaIn, x_service_pin: str | None = Header(None)):
-    """Service-gated: toggle whether this user sees the whole loja (loja-wide) or
-    only their own CRM account's scope. Read by core.scope.account_filter."""
-    _require_pin(x_service_pin)
+@router.delete("/users/{user_id}")
+def delete_user(user_id: int, request: Request):
+    acting = _acting_user(request)
     sb = supabase()
-    _get_user_or_404(sb, user_id, "id")
-    sb.table("platform_users").update(
-        {"acesso_loja_toda": body.acesso_loja_toda, "updated_at": _now()}
-    ).eq("id", user_id).execute()
+    target = _get_user_or_404(sb, user_id, "id, role, manager_id")
+    if acting["id"] == target["id"]:
+        raise HTTPException(400, "Não pode apagar a própria conta.")
+    if not _can_manage(acting, target):
+        raise HTTPException(403, "Sem permissão para apagar este utilizador.")
+    # Orphan any reports (e.g. deleting a diretor_comercial): null their team link.
+    sb.table("platform_users").update({"manager_id": None}).eq("manager_id", user_id).execute()
+    sb.table("platform_users").delete().eq("id", user_id).execute()
+    return {"ok": True}
+
+
+# ---- managers dropdown (for mapping a comercial to a CRM gestor) ----------
+@router.get("/managers")
+def list_managers(request: Request):
+    """Distinct CRM gestores visible to the acting user — for the manager_crm_id
+    dropdown when creating/editing a comercial."""
+    sb = supabase()
+    q = apply_scope(sb.table("processos_real").select("manager_crm_id, manager_name"), user_scope(request))
+    rows = q.execute().data or []
+    seen: dict[int, str | None] = {}
+    for r in rows:
+        mid = r.get("manager_crm_id")
+        if mid is None:
+            continue
+        seen.setdefault(mid, fix_name(r.get("manager_name")))
+    managers = sorted(
+        ({"crm_id": mid, "nome": nome} for mid, nome in seen.items()),
+        key=lambda m: (m["nome"] or ""),
+    )
+    return {"managers": managers}
+
+
+# ---- loja config ---------------------------------------------------------
+@router.get("/loja")
+def get_loja():
+    sb = supabase()
+    row = (sb.table("loja_config").select("numero, nome").eq("id", 1).limit(1).execute().data or [{}])[0]
+    return {"numero": row.get("numero"), "nome": row.get("nome")}
+
+
+class LojaIn(BaseModel):
+    numero: str | None = None
+    nome: str | None = None
+
+
+@router.put("/loja")
+def put_loja(body: LojaIn, request: Request):
+    acting = _acting_user(request)
+    if acting["role"] != "diretor_loja":
+        raise HTTPException(403, "Só o Diretor de Loja pode alterar a loja.")
+    sb = supabase()
+    sb.table("loja_config").update(
+        {"numero": body.numero, "nome": body.nome, "updated_at": _now()}
+    ).eq("id", 1).execute()
     return {"ok": True}

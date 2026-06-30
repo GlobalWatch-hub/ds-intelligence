@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Request
 
-from ..core.scope import account_filter
+from ..core.scope import user_scope, apply_scope
 from ..db import supabase
 
 router = APIRouter()
@@ -38,15 +38,13 @@ def _parse_iso_date(s: str | None) -> date | None:
         return None
 
 
-def _select_all(sb, table: str, columns: str, page_size: int = 1000, *, account: str | None = None) -> list[dict]:
-    """Paginate around Supabase's default 1000-row select cap. When `account` is
-    given, filter by `source_account` (per-user CRM scoping — processos/leads)."""
+def _select_all(sb, table: str, columns: str, page_size: int = 1000, *, scope: dict | None = None) -> list[dict]:
+    """Paginate around Supabase's default 1000-row select cap. When `scope` is
+    given, apply the per-profile filter (processos/leads)."""
     rows: list[dict] = []
     offset = 0
     while True:
-        q = sb.table(table).select(columns)
-        if account is not None:
-            q = q.contains("source_accounts", [account])
+        q = apply_scope(sb.table(table).select(columns), scope)
         chunk = q.range(offset, offset + page_size - 1).execute().data or []
         rows.extend(chunk)
         if len(chunk) < page_size:
@@ -71,9 +69,9 @@ def _upcoming_birthday(dob: str | None, today: date, until: date) -> bool:
 @router.get("/kpis")
 def dashboard_kpis(request: Request):
     sb = supabase()
-    acct = account_filter(request)  # None for admin/coordenador; else this gestor's source_account
+    scope = user_scope(request)  # None for diretor_loja/admin; else this user's filter
 
-    # clientes_real is loja-wide (not scoped); processos/leads are scoped per user.
+    # clientes_real is loja-wide (not scoped); processos/leads are scoped per profile.
     clientes = _select_all(
         sb, "clientes_real", "crm_id, name, date_of_birth, telephone, email, raw"
     )
@@ -82,13 +80,13 @@ def dashboard_kpis(request: Request):
         "crm_id, customer_crm_id, customer_name, state_id, state_name, "
         "type_name, docs_mandatory, docs_uploaded, docs_validated, "
         "updated_on_crm, created_on_crm, archived",
-        account=acct,
+        scope=scope,
     )
     leads = _select_all(
         sb, "leads_real",
         "crm_id, name, telephone, type_name, state_name, origin_name, "
         "updated_on_crm, created_on_crm",
-        account=acct,
+        scope=scope,
     )
 
     today = _today()
@@ -245,20 +243,17 @@ def dashboard_kpis(request: Request):
             "processos_em_curso": processos_em_curso,
             "processos_ganhos": processos_ganhos,
         },
-        "crm_live": _crm_live_snapshot(sb, acct),
+        "crm_live": _crm_live_snapshot(sb, scope),
     }
 
 
-def _crm_live_snapshot(sb, account: str | None = None) -> dict:
+def _crm_live_snapshot(sb, scope: dict | None = None) -> dict:
     """Snapshot of live CRM ingest — counts + last sync timestamps. processos/leads
-    counts respect the per-user scope; clientes stays loja-wide."""
+    counts respect the per-profile scope; clientes stays loja-wide."""
     try:
         clientes_count = sb.table("clientes_real").select("crm_id", count="exact").limit(1).execute().count or 0
-        pq = sb.table("processos_real").select("crm_id", count="exact")
-        lq = sb.table("leads_real").select("crm_id", count="exact")
-        if account is not None:
-            pq = pq.contains("source_accounts", [account])
-            lq = lq.contains("source_accounts", [account])
+        pq = apply_scope(sb.table("processos_real").select("crm_id", count="exact"), scope)
+        lq = apply_scope(sb.table("leads_real").select("crm_id", count="exact"), scope)
         processos_count = pq.limit(1).execute().count or 0
         leads_count = lq.limit(1).execute().count or 0
 

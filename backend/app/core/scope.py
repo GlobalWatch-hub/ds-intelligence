@@ -1,18 +1,15 @@
-"""Per-user read scoping for the CRM mirror (phase 2).
+"""Per-profile read scoping for the CRM mirror (role hierarchy).
 
-The logged-in platform user only sees the processos/leads that THEIR CrediDesk
-account ingested — i.e. rows tagged `source_account = <username>` (see migration
-010 + the ingest loop). This mirrors real CRM visibility, which no single account
-covers for the whole loja.
+The logged-in platform user sees processos/leads according to their profile:
+  * diretor_loja          → the whole loja (no filter)
+  * diretor_comercial     → own + team = what their CRM account ingests
+                            (source_accounts @> {username})
+  * comercial             → only their own (manager_crm_id == theirs)
+  * env-only logins (ds/amin, not in platform_users) → loja-wide
 
-`account_filter(request)` returns the `source_account` value to filter by, or
-None meaning "see everything":
-  * platform_users gestor      -> own username (their account's scope)
-  * platform_users admin/coord -> None (loja-wide)
-  * env-only logins (ds/amin)  -> None (admin, loja-wide)
-
-clientes_real is NOT scoped (loja-wide by product design) — callers simply don't
-ask for a filter on it.
+`user_scope(request)` returns None (loja-wide) or a filter descriptor;
+`apply_scope(query, scope)` applies it to a Supabase query. clientes_real is
+never scoped (loja-wide by product design) — callers just don't pass a scope.
 """
 from __future__ import annotations
 
@@ -20,31 +17,19 @@ from fastapi import Request
 
 from ..routers.auth import COOKIE_NAME, token_user
 
-# Roles that see every account's data (no source_account filter).
-_SEE_ALL_ROLES = {"admin", "coordenador"}
-
 
 def current_username(request: Request) -> str | None:
     return token_user(request.cookies.get(COOKIE_NAME))
 
 
-def account_filter(request: Request) -> str | None:
-    """source_account to filter processos/leads by, or None to see all.
-
-    The session gate in main.py guarantees a valid token before any router runs,
-    so an unknown username here means an admin/test login (not in platform_users)
-    → loja-wide access.
-    """
-    username = current_username(request)
-    if not username:
-        return None
+def _user_row(username: str) -> dict | None:
     try:
         from ..db import supabase
 
-        row = (
+        return (
             supabase()
             .table("platform_users")
-            .select("username, role, is_active, acesso_loja_toda")
+            .select("username, role, manager_crm_id, is_active")
             .eq("username", username)
             .eq("is_active", True)
             .limit(1)
@@ -53,9 +38,37 @@ def account_filter(request: Request) -> str | None:
             or [None]
         )[0]
     except Exception:
-        row = None
+        return None
+
+
+def user_scope(request: Request) -> dict | None:
+    """None = loja-wide; else {'kind': 'source_account'|'manager_crm_id', 'value': ...}.
+
+    The session gate (main.py) guarantees a valid token before any router runs, so
+    an unknown username here means an admin/test login (not in platform_users).
+    """
+    username = current_username(request)
+    if not username:
+        return None
+    row = _user_row(username)
     if not row:
-        return None  # ds/amin or any non-DB login → see all
-    if row.get("acesso_loja_toda") or (row.get("role") or "gestor") in _SEE_ALL_ROLES:
-        return None  # "Acesso Loja Toda" (or admin/coordenador role) → loja-wide
-    return username
+        return None  # ds/amin etc → loja-wide
+    role = row.get("role") or "comercial"
+    if role == "diretor_loja":
+        return None
+    if role == "diretor_comercial":
+        return {"kind": "source_account", "value": username}
+    # comercial → own processos only; unmapped (no manager_crm_id) sees nothing (-1)
+    mid = row.get("manager_crm_id")
+    return {"kind": "manager_crm_id", "value": mid if mid is not None else -1}
+
+
+def apply_scope(query, scope: dict | None):
+    """Apply a user_scope descriptor to a Supabase query builder."""
+    if scope is None:
+        return query
+    if scope["kind"] == "source_account":
+        return query.contains("source_accounts", [scope["value"]])
+    if scope["kind"] == "manager_crm_id":
+        return query.eq("manager_crm_id", scope["value"])
+    return query
