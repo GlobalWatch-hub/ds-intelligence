@@ -160,6 +160,45 @@ function UserForm({
   );
 }
 
+// ---- Sincronizar CRM (Diretor de Loja) -----------------------------------
+type SyncRun = { finished_at: string | null; rows_upserted: number | null; error: string | null } | null;
+function SyncBar() {
+  const { data, mutate } = useSWR<{ processos: SyncRun; leads: SyncRun; running: boolean }>(
+    '/api/settings/sync/status', api, { refreshInterval: (d) => (d?.running ? 4000 : 0) },
+  );
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const running = !!data?.running;
+
+  async function run() {
+    setBusy(true); setMsg(null);
+    try {
+      await api('/api/settings/sync', { method: 'POST' });
+      setMsg('Sincronização iniciada — pode demorar 1–2 min.');
+      setTimeout(mutate, 1500);
+    } catch (e: any) {
+      setMsg(/409/.test(e.message) ? 'Já existe uma sincronização em curso.' : `Erro: ${e.message}`);
+    } finally { setBusy(false); }
+  }
+
+  const p = data?.processos, l = data?.leads;
+  const last = !running && p?.finished_at
+    ? `Última sincronização: ${p?.rows_upserted ?? '—'} processos / ${l?.rows_upserted ?? '—'} leads`
+    : null;
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-ink-200 bg-ink-50/50 px-3 py-2">
+      <button onClick={run} disabled={busy || running} className="btn-primary">
+        {running ? 'A sincronizar …' : 'Sincronizar CRM'}
+      </button>
+      <span className="text-xs text-ink-500">
+        {running ? 'Em curso …' : last ?? 'Corre a ingestão para etiquetar os dados de um novo Diretor Comercial.'}
+        {p?.error && <span className="text-ds-700"> · último erro registado</span>}
+      </span>
+      {msg && <span className="text-xs text-ink-400">{msg}</span>}
+    </div>
+  );
+}
+
 // ---- Utilizadores tab ----------------------------------------------------
 function UtilizadoresTab() {
   const { data, mutate } = useSWR<UsersResp>('/api/settings/users', api);
@@ -184,7 +223,9 @@ function UtilizadoresTab() {
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-[240px_1fr]">
+    <div>
+      {acting?.role === 'diretor_loja' && <SyncBar />}
+      <div className="grid gap-6 md:grid-cols-[240px_1fr]">
       <nav className="space-y-1">
         <div className="flex items-center justify-between px-1 pb-1">
           <span className="text-xs font-semibold uppercase tracking-wider text-ink-400">Utilizadores</span>
@@ -228,6 +269,7 @@ function UtilizadoresTab() {
           </div>
         )}
       </section>
+      </div>
     </div>
   );
 }

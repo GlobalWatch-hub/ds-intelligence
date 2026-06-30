@@ -12,7 +12,10 @@ user's profile. All routes sit behind the global session gate (main.py).
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import subprocess
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -289,3 +292,62 @@ def put_loja(body: LojaIn, request: Request):
         {"numero": body.numero, "nome": body.nome, "updated_at": _now()}
     ).eq("id", 1).execute()
     return {"ok": True}
+
+
+# ---- CRM sync (re-ingest, so a new diretor_comercial's team gets tagged) ----
+_SYNC_SOURCES = ["credidesk_processos", "credidesk_leads"]
+
+
+def _backend_dir() -> Path:
+    return Path(__file__).resolve().parents[2]  # app/routers/settings.py -> backend/
+
+
+@router.post("/sync")
+def sync_crm(request: Request):
+    """Diretor de Loja only. Spawns a DETACHED re-ingest of processos+leads over all
+    CRM accounts (so a newly-added diretor_comercial's rows get tagged with their
+    username). Runs out-of-process — the single uvicorn worker is never blocked."""
+    acting = _acting_user(request)
+    if acting["role"] != "diretor_loja":
+        raise HTTPException(403, "Só o Diretor de Loja pode sincronizar o CRM.")
+    sb = supabase()
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=20)).isoformat()
+    running = (
+        sb.table("crm_sync_runs").select("id")
+        .in_("source", _SYNC_SOURCES).is_("finished_at", "null").gte("started_at", cutoff)
+        .limit(1).execute().data
+    )
+    if running:
+        raise HTTPException(409, "Já existe uma sincronização em curso.")
+
+    backend = _backend_dir()
+    py = sys.executable
+    # `;` (not `&&`) so leads still runs even if processos errors on one account.
+    cmd = (
+        f'"{py}" integrations/ds_crm/ingest_processos.py ; '
+        f'"{py}" integrations/ds_crm/ingest_leads.py'
+    )
+    try:
+        logf = open(backend.parent / "ds-sync.log", "a")  # ~/ds-engine/ds-sync.log
+    except OSError:
+        logf = subprocess.DEVNULL
+    subprocess.Popen(cmd, shell=True, cwd=str(backend), stdout=logf, stderr=logf, start_new_session=True)
+    return {"started": True}
+
+
+@router.get("/sync/status")
+def sync_status():
+    """Last processos/leads ingest runs (for the sync button to poll)."""
+    sb = supabase()
+
+    def _last(source: str) -> dict | None:
+        r = (
+            sb.table("crm_sync_runs")
+            .select("source, started_at, finished_at, rows_upserted, error")
+            .eq("source", source).order("started_at", desc=True).limit(1).execute().data
+        )
+        return r[0] if r else None
+
+    proc, leads = _last("credidesk_processos"), _last("credidesk_leads")
+    running = bool((proc and not proc.get("finished_at")) or (leads and not leads.get("finished_at")))
+    return {"processos": proc, "leads": leads, "running": running}
