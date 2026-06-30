@@ -29,7 +29,7 @@ def _user_row(username: str) -> dict | None:
         return (
             supabase()
             .table("platform_users")
-            .select("username, role, manager_crm_id, is_active")
+            .select("username, nome, role, manager_crm_id, is_active")
             .eq("username", username)
             .eq("is_active", True)
             .limit(1)
@@ -61,6 +61,24 @@ def user_scope(request: Request) -> dict | None:
     # comercial → own processos only; unmapped (no manager_crm_id) sees nothing (-1)
     mid = row.get("manager_crm_id")
     return {"kind": "manager_crm_id", "value": mid if mid is not None else -1}
+
+
+def scope_label(request: Request) -> str:
+    """Human label (pt) of the logged-in user's CRM data scope, to show wherever
+    CRM figures appear: 'Loja toda' / 'Equipa de X' / 'Carteira de X'."""
+    username = current_username(request)
+    if not username:
+        return "Loja toda"
+    row = _user_row(username)
+    if not row:
+        return "Loja toda"
+    role = row.get("role") or "comercial"
+    nome = row.get("nome") or username
+    if role == "diretor_loja":
+        return "Loja toda"
+    if role == "diretor_comercial":
+        return f"Equipa de {nome}"
+    return f"Carteira de {nome}"
 
 
 def apply_scope(query, scope: dict | None):

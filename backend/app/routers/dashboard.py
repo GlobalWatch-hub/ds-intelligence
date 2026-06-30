@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Request
 
-from ..core.scope import user_scope, apply_scope
+from ..core.scope import user_scope, apply_scope, scope_label
 from ..db import supabase
 
 router = APIRouter()
@@ -243,11 +243,11 @@ def dashboard_kpis(request: Request):
             "processos_em_curso": processos_em_curso,
             "processos_ganhos": processos_ganhos,
         },
-        "crm_live": _crm_live_snapshot(sb, scope),
+        "crm_live": _crm_live_snapshot(sb, scope, scope_label(request)),
     }
 
 
-def _crm_live_snapshot(sb, scope: dict | None = None) -> dict:
+def _crm_live_snapshot(sb, scope: dict | None = None, label: str = "Loja toda") -> dict:
     """Snapshot of live CRM ingest — counts + last sync timestamps. processos/leads
     counts respect the per-profile scope; clientes stays loja-wide."""
     try:
@@ -282,7 +282,8 @@ def _crm_live_snapshot(sb, scope: dict | None = None) -> dict:
             "last_sync_processos_rows": last_processos.get("rows_upserted"),
             "last_sync_leads_at": last_leads.get("finished_at"),
             "last_sync_leads_rows": last_leads.get("rows_upserted"),
-            "source": "CrediDesk · DSIC Odivelas Jardim da Amoreira (Bruno Sousa)",
+            "source": f"CrediDesk · {label}",
+            "scope_label": label,
         }
     except Exception as e:
         return {"total_clientes": 0, "error": f"{type(e).__name__}: {e}"}

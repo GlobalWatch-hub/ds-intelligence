@@ -52,6 +52,12 @@ export default function ClientesLive() {
   if (comProc) qs.set('com_processo', '1');
   const { data, error, isLoading } = useSWR<Page>(`/api/crm-live/customers?${qs}`, api);
   const { data: filters } = useSWR<Filters>('/api/crm-live/filters', api);
+  const { data: me } = useSWR<{ role: string; nome: string | null }>('/api/auth/me', api);
+  const scopeLbl = me
+    ? me.role === 'diretor_loja' ? 'Loja toda'
+      : me.role === 'diretor_comercial' ? `Equipa de ${me.nome ?? ''}`
+      : `Carteira de ${me.nome ?? ''}`
+    : '…';
 
   return (
     <div className="space-y-6">
@@ -61,8 +67,8 @@ export default function ClientesLive() {
           <h1 className="text-2xl font-semibold text-ink-900">Clientes em direto do CRM</h1>
         </div>
         <p className="text-ink-400 mt-1 text-sm">
-          Espelho de <code className="text-xs">crm.dsicredito.pt</code> via conta Bruno Sousa ·
-          loja DSIC Odivelas Jardim da Amoreira
+          Espelho de <code className="text-xs">crm.dsicredito.pt</code> · clientes da loja inteira ·
+          processos no âmbito: <span className="font-medium text-ink-600">{scopeLbl}</span>
         </p>
       </section>
 

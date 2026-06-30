@@ -81,6 +81,7 @@ function UserForm({
 
   const diretores = users.filter((u) => u.role === 'diretor_comercial');
   const roleOptions: Role[] = lojaDir ? ['diretor_comercial', 'comercial'] : ['comercial'];
+  const lockedRole = mode === 'edit' && full?.role === 'diretor_loja'; // não se reestrutura um Diretor de Loja
   const isComercial = f.role === 'comercial';
   const isDiretorComercial = f.role === 'diretor_comercial';
 
@@ -120,12 +121,12 @@ function UserForm({
       <Field label="Telemóvel" value={f.telefone} onChange={(e) => setF({ ...f, telefone: e.target.value })} />
       <Field label="Email" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
 
-      {lojaDir ? (
+      {lojaDir && !lockedRole ? (
         <Select label="Perfil" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value as Role })}>
           {roleOptions.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
         </Select>
       ) : (
-        <p className="text-xs text-ink-500">Perfil: <span className="font-medium">Comercial</span></p>
+        <p className="text-xs text-ink-500">Perfil: <span className="font-medium">{ROLE_LABEL[f.role]}</span></p>
       )}
 
       {isComercial && (

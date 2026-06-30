@@ -63,9 +63,11 @@ def _acting_user(request: Request) -> dict:
 
 
 def _can_manage(acting: dict, target: dict) -> bool:
-    """Whether `acting` may edit/delete `target`."""
+    """Whether `acting` may view/edit `target`. Diretor de Loja can see/edit anyone
+    (deleting a diretor_loja is blocked separately); diretor_comercial only their
+    own team's comerciais."""
     if acting["role"] == "diretor_loja":
-        return (target.get("role") or "comercial") in MANAGEABLE_ROLES
+        return True
     if acting["role"] == "diretor_comercial":
         return target.get("role") == "comercial" and target.get("manager_id") == acting["id"]
     return False
@@ -218,8 +220,10 @@ def update_user(user_id: int, body: UserIn, request: Request):
         patch["crm_username"] = body.crm_username
     if body.crm_password:
         patch["crm_password_enc"] = encrypt_secret(body.crm_password)
-    # Structural fields (role / team / CRM identity) only when managing (not self-only).
-    if can_manage:
+    # Structural fields (role / team / CRM identity) only when managing a non-
+    # diretor_loja target — never restructure a Diretor de Loja (avoids accidental
+    # demotion when a peer/self opens the edit form).
+    if can_manage and target.get("role") != "diretor_loja":
         if body.role and body.role != target.get("role"):
             if body.role not in VALID_ROLES or not _can_create(acting, body.role):
                 raise HTTPException(403, "Sem permissão para atribuir esse perfil.")
@@ -240,6 +244,8 @@ def delete_user(user_id: int, request: Request):
     target = _get_user_or_404(sb, user_id, "id, role, manager_id")
     if acting["id"] == target["id"]:
         raise HTTPException(400, "Não pode apagar a própria conta.")
+    if target.get("role") == "diretor_loja":
+        raise HTTPException(403, "Não é possível apagar um Diretor de Loja.")
     if not _can_manage(acting, target):
         raise HTTPException(403, "Sem permissão para apagar este utilizador.")
     # Orphan any reports (e.g. deleting a diretor_comercial): null their team link.
