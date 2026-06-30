@@ -92,10 +92,10 @@ function UserForm({
       role: f.role,
       manager_id: f.manager_id ? Number(f.manager_id) : null,
       manager_crm_id: isComercial && f.manager_crm_id ? Number(f.manager_crm_id) : null,
-      crm_username: isDiretorComercial ? f.crm_username : null,
+      crm_username: f.crm_username || null,
     };
     if (f.password) body.password = f.password;
-    if (isDiretorComercial && f.crm_password) body.crm_password = f.crm_password;
+    if (f.crm_password) body.crm_password = f.crm_password;
     try {
       if (mode === 'create') {
         if (!f.password) { setMsg('Palavra-passe obrigatória.'); setBusy(false); return; }
@@ -144,13 +144,15 @@ function UserForm({
         </>
       )}
 
-      {isDiretorComercial && (
-        <div className="space-y-3 rounded-lg border border-ink-200 bg-ink-50/50 p-3">
-          <p className="text-xs font-medium text-ink-600">Credenciais CRM (para ingerir a equipa deste diretor)</p>
-          <Field label="Utilizador CRM (email)" value={f.crm_username} onChange={(e) => setF({ ...f, crm_username: e.target.value })} autoComplete="off" />
-          <Field label={full?.crm_password_set ? 'Palavra-passe CRM (definida — vazio = manter)' : 'Palavra-passe CRM'} type="password" autoComplete="new-password" value={f.crm_password} onChange={(e) => setF({ ...f, crm_password: e.target.value })} />
-        </div>
-      )}
+      <div className="space-y-3 rounded-lg border border-ink-200 bg-ink-50/50 p-3">
+        <p className="text-xs font-medium text-ink-600">
+          Credenciais CRM (CrediDesk)
+          {isComercial && <span className="font-normal text-ink-400"> — opcional; o âmbito do Comercial vem do gestor acima</span>}
+          {isDiretorComercial && <span className="font-normal text-ink-400"> — necessárias para ingerir os dados da equipa deste diretor</span>}
+        </p>
+        <Field label="Utilizador CRM (email)" value={f.crm_username} onChange={(e) => setF({ ...f, crm_username: e.target.value })} autoComplete="off" />
+        <Field label={full?.crm_password_set ? 'Palavra-passe CRM (definida — vazio = manter)' : 'Palavra-passe CRM'} type="password" autoComplete="new-password" value={f.crm_password} onChange={(e) => setF({ ...f, crm_password: e.target.value })} />
+      </div>
 
       <div className="flex items-center gap-3">
         <button onClick={save} disabled={busy} className="btn-primary">{busy ? 'A guardar …' : 'Guardar'}</button>
