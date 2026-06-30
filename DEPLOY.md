@@ -15,14 +15,25 @@ manual, and how to fix it when something breaks.
 
 ## 1. Infrastructure at a glance
 
+> ⚠️ **Infra atual (verificada 2026-06-30)** — a migração para o box novo + projeto
+> Supabase novo deixou esta tabela desatualizada; valores corretos abaixo.
+
 | Thing | Value |
 |---|---|
-| Platform URL | https://dscredito.synertia-gw.ai  (basic auth `ds` / `<APP_PASSWORD>`) |
-| EC2 | `i-0e8a7ed1ec87e6391`, eu-west-1, t3.small, **52.48.160.156** |
-| SSH | `ssh -i ~/.ssh/ds-intelligence-key.pem ubuntu@52.48.160.156` |
-| Backend | FastAPI under `~/ds-engine/backend`, venv `~/ds-engine/backend/venv`, uvicorn `:8005`, systemd `ds-intelligence.service` |
-| Frontend | Next.js 14, systemd `ds-intelligence-frontend.service`, port 3005 |
-| DB | Supabase **Clara_Production**, schema `ds` (ref `gpjcgkyvezgdunytkueu`) |
+| Platform URL | https://dscredito.synertia-gw.ai |
+| EC2 | `i-09791c4600bef70ea`, eu-west-1, **108.130.14.101**, user `ubuntu` |
+| SSH | `ssh -i ~/.ssh/dscredito-key.pem ubuntu@108.130.14.101` |
+| Backend | FastAPI em `~/ds-engine/backend`, venv `~/ds-engine/backend/venv`, systemd `ds-intelligence.service` |
+| Frontend | Next.js, systemd `ds-intelligence-frontend.service` |
+| Staging | `~/ds-engine-staging` (branch `staging`); ver memória/`deploy-staging.sh` |
+| DB | Supabase ref **`bsxnzxroxcjtgtvqozgo`**, schema `ds` (ligação DDL: `cred/ddl.txt`, gitignored) |
+| Deploy | git-based: push a `origin/main`, depois `ssh … 'cd ~/ds-engine && ./deploy.sh'` |
+
+**Deploy rápido (runbook):**
+1. `git push origin main`.
+2. Novas env vars → acrescentar **à mão** em `~/ds-engine/backend/.env` no box (o deploy nunca lhes toca).
+3. `ssh -i ~/.ssh/dscredito-key.pem ubuntu@108.130.14.101 'cd ~/ds-engine && ./deploy.sh'`.
+4. Migrações (se houver): `DB_URL="$(cat cred/ddl.txt)" python scripts/apply_migrations.py` (local, contra a prod; idempotente).
 | Web server | nginx + Let's Encrypt; proxies only `/api/*` → FastAPI (note: `/health` is not exposed publicly) |
 | LLM | dedicated DS Anthropic key (`ANTHROPIC_API_KEY` in `.env`) |
 | WhatsApp | dedicated DS Meta app (System User token, no expiry) |
@@ -203,6 +214,39 @@ credential — use it for test logins (e.g. **amin**) without sharing the main o
 Add more later, e.g. `{"amin":"...","baptiste":"..."}`. Empty `APP_PASSWORD`+`APP_USERS`
 or empty `APP_SESSION_SECRET` ⇒ login fails closed (nobody can log in) — so these
 MUST be set before the nginx step, or the platform locks everyone out.
+
+**Per-user accounts (migration 009).** Login now reads `ds.platform_users` first
+and only falls back to `APP_USERS`/`APP_PASSWORD` for the `ds`/`amin` admin logins.
+Bootstrap the per-user accounts (Bruno `bs`, Jorge `jg`) on deploy:
+
+```
+# 1) add to .env: a Fernet key (encrypts CRM passwords) + the service PIN
+APP_CRYPTO_KEY=$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+APP_SERVICE_PIN=28021904
+# 2) apply migration 009 then seed (reads APP_USERS for platform pw, DS_CRM_* for Bruno's CRM creds)
+python3 scripts/apply_migrations.py <host> <port> <user> <password>
+python3 scripts/seed_platform_users.py
+```
+
+The seed is idempotent and never overwrites a password/CRM credential already set
+via the **Configurações → Utilizadores** UI. The CRM-credentials tab ("Definições")
+is gated by `APP_SERVICE_PIN`; CRM passwords are stored Fernet-encrypted and never
+returned to the client in clear text.
+
+**Per-user CRM scoping (migrations 010 + 011, phase 2).** Each processo/lead row is
+tagged with `source_accounts text[]` = the set of platform accounts whose CrediDesk
+login can see it (a row can be visible to several — e.g. shared leads). The read
+routers filter `source_accounts @> {<username>}` so each gestor sees exactly their
+CRM scope; `ds`/`amin` (not in platform_users) and role `admin`/`coordenador` see
+loja-wide. `clientes_real` stays loja-wide (not scoped). The ingest scripts
+(`ingest_processos.py`, `ingest_leads.py`) now loop over every active CRM account in
+`platform_users` (two-pass merge) and mint each account's JWT in memory — they never
+touch the shared `DS_CRM_JWT`.
+
+IMPORTANT: `APP_CRYPTO_KEY` MUST be identical on every host that runs ingestion
+(box + anywhere else), otherwise the stored CRM passwords can't be decrypted. Set it
+once and copy the same value. After deploy, run `apply_migrations.py` (010+011) then
+the two ingest scripts so `source_accounts` is populated.
 
 **b) Deploy code + restart services** (scp the changed files, then):
 

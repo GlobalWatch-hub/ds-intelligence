@@ -16,10 +16,11 @@ import json
 from datetime import date, datetime, timedelta
 
 import anthropic
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from ..config import settings
+from ..core.scope import account_filter
 from ..db import supabase
 
 router = APIRouter()
@@ -45,10 +46,11 @@ DATA SOURCES INSIDE THE SNAPSHOT:
   If a question targets apólices, answer from the demo data BUT add a single
   sentence at the end: "(Dados de apólices ainda em modo demo — integração com a CRM de seguros DS pendente.)"
 
-SCOPE: clientes are loja-wide; processos and leads mirror this gestor's account
-(Bruno Sousa). If asked for loja-wide processo/lead figures across every gestor,
-answer with the gestor's numbers and note they reflect this gestor's pipeline (a
-loja-coordinator view is not yet available). Never invent figures for other gestores.
+SCOPE: clientes are loja-wide; processos and leads mirror the LOGGED-IN gestor's
+own CrediDesk account. If asked for loja-wide processo/lead figures across every
+gestor, answer with this gestor's numbers and note they reflect their own pipeline
+(a loja-coordinator view is not yet available). Never invent figures for other
+gestores.
 
 RULES:
 - For counting / "quantos" / total / volume questions, use `agregados` and give the
@@ -91,11 +93,14 @@ RULES:
 - Keep replies under 200 words unless explicitly asked for more detail."""
 
 
-def _select_all(sb, table: str, columns: str, page_size: int = 1000) -> list[dict]:
+def _select_all(sb, table: str, columns: str, page_size: int = 1000, *, account: str | None = None) -> list[dict]:
     rows: list[dict] = []
     offset = 0
     while True:
-        chunk = sb.table(table).select(columns).range(offset, offset + page_size - 1).execute().data or []
+        q = sb.table(table).select(columns)
+        if account is not None:
+            q = q.contains("source_accounts", [account])
+        chunk = q.range(offset, offset + page_size - 1).execute().data or []
         rows.extend(chunk)
         if len(chunk) < page_size:
             break
@@ -151,18 +156,19 @@ def _upcoming_birthday(dob: str | None, today: date, until: date) -> bool:
     return today <= by <= until
 
 
-def _crm_snapshot() -> dict:
+def _crm_snapshot(account: str | None = None) -> dict:
     sb = supabase()
     today = date.today()
     in_7d = today + timedelta(days=7)
 
-    # LIVE — all processos
+    # LIVE — processos for the logged-in gestor's account (loja-wide for admin)
     processos = _select_all(
         sb, "processos_real",
         "crm_id, reference, customer_crm_id, customer_name, customer_tax_number, "
         "customer_telephone, manager_name, state_name, type_name, financing_amount, "
         "commission_amount, docs_mandatory, docs_uploaded, docs_validated, "
-        "created_on_crm, updated_on_crm"
+        "created_on_crm, updated_on_crm",
+        account=account,
     )
     processos_trim = [_trim_processo(p) for p in processos]
 
@@ -186,11 +192,12 @@ def _crm_snapshot() -> dict:
     # LIVE — consultores from the processos manager_name distinct
     consultores = sorted({p.get("manager_name") for p in processos if p.get("manager_name")})
 
-    # LIVE — leads (all 438)
+    # LIVE — leads for the logged-in gestor's account (loja-wide for admin)
     leads_all = _select_all(
         sb, "leads_real",
         "crm_id, name, telephone, type_full_name, state_name, origin_name, "
-        "financing_amount, manager_name, created_on_crm, updated_on_crm"
+        "financing_amount, manager_name, created_on_crm, updated_on_crm",
+        account=account,
     )
     leads_trim = [
         {
@@ -248,7 +255,7 @@ def _crm_snapshot() -> dict:
         leads_por_estado[sn] = leads_por_estado.get(sn, 0) + 1
 
     agregados = {
-        "ambito": "clientes = loja inteira; processos e leads = conta do gestor (Bruno Sousa)",
+        "ambito": "clientes = loja inteira; processos e leads = conta do gestor autenticado",
         "total_clientes_loja": len(clientes_all),
         "total_processos_gestor": len(processos),
         "total_leads_gestor": len(leads_all),
@@ -281,11 +288,11 @@ class ChatBody(BaseModel):
 
 
 @router.post("/ask")
-def ask(body: ChatBody):
+def ask(body: ChatBody, request: Request):
     if not settings.ANTHROPIC_API_KEY:
         raise HTTPException(500, "ANTHROPIC_API_KEY not configured")
 
-    snapshot = _crm_snapshot()
+    snapshot = _crm_snapshot(account_filter(request))
     snapshot_json = json.dumps(snapshot, ensure_ascii=False, default=str)
 
     messages = []

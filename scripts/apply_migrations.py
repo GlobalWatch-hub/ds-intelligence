@@ -4,6 +4,8 @@ exists`). Connection params are read from argv to keep the password out of the
 file. Run order matters: 007 alters clientes_real (created in 003)."""
 from __future__ import annotations
 
+import os
+import re
 import sys
 from pathlib import Path
 
@@ -17,6 +19,9 @@ ORDER = [
     "006_leads_real.sql",
     "007_consent.sql",
     "008_grants_and_expose.sql",
+    "009_platform_users.sql",
+    "010_source_account.sql",
+    "011_source_accounts_array.sql",
 ]
 
 MIG_DIR = Path(__file__).resolve().parents[1] / "migrations"
@@ -32,10 +37,30 @@ def split_statements(sql: str):
             yield chunk.strip() + ";"
 
 
+def _parse_db_url(url: str):
+    """Parse postgresql://user:password@host:port/dbname into keyword parts.
+    Tolerates passwords containing @ / $ / ! (greedy password, last '@' splits
+    off the host) so we can connect via kwargs and never URL-encode."""
+    m = re.match(r"^\w+://([^:]+):(.*)@([^:@/]+):(\d+)/(.+)$", url.strip())
+    if not m:
+        sys.exit("DB_URL inválido — esperado postgresql://user:pass@host:port/dbname")
+    user, password, host, port, dbname = m.group(1), m.group(2), m.group(3), m.group(4), m.group(5)
+    return host, port, user, password, dbname
+
+
 def main():
-    host, port, user, password = sys.argv[1:5]
+    # Connection comes from argv (host port user password) OR, to keep the
+    # password out of the command line, from the DB_URL env var (e.g.
+    # `DB_URL="$(cat cred/ddl.txt)" python scripts/apply_migrations.py`).
+    if len(sys.argv) >= 5:
+        host, port, user, password = sys.argv[1:5]
+        dbname = "postgres"
+    elif os.environ.get("DB_URL"):
+        host, port, user, password, dbname = _parse_db_url(os.environ["DB_URL"])
+    else:
+        sys.exit("Uso: apply_migrations.py <host> <port> <user> <password>  (ou env DB_URL)")
     conn = psycopg.connect(
-        host=host, port=int(port), dbname="postgres",
+        host=host, port=int(port), dbname=dbname,
         user=user, password=password, connect_timeout=15, autocommit=True,
     )
     cur = conn.cursor()

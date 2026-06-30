@@ -25,6 +25,12 @@ class Settings:
     APP_PASSWORD: str = os.environ.get("APP_PASSWORD", "")
     APP_USERS: str = os.environ.get("APP_USERS", "")
     APP_SESSION_SECRET: str = os.environ.get("APP_SESSION_SECRET", "")
+    # Fernet key (urlsafe-base64, 32 bytes) used to encrypt CRM credentials at
+    # rest in ds.platform_users. Generate once with cryptography.fernet.Fernet.
+    APP_CRYPTO_KEY: str = os.environ.get("APP_CRYPTO_KEY", "")
+    # Global service PIN that unlocks the CRM-credentials ("Definições") tab.
+    # Default matches the agreed operator PIN; override via env in production.
+    APP_SERVICE_PIN: str = os.environ.get("APP_SERVICE_PIN", "28021904")
     # Session cookie Secure flag. True in production (HTTPS); set COOKIE_SECURE=false
     # to allow login over plain HTTP (e.g. testing by IP before a domain + SSL).
     COOKIE_SECURE: bool = os.environ.get("COOKIE_SECURE", "true").strip().lower() != "false"

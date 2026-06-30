@@ -11,7 +11,7 @@ import {
   VERSION as UI_VERSION,
 } from '@globalwatch-hub/synertia-ui';
 import ChatDock from './ChatDock';
-import LogoutButton from './LogoutButton';
+import UserFooter from './UserFooter';
 
 // Versão: [plataforma].[pacote UI] build [git]. A plataforma está na v1; o git
 // sha é injetado no build (NEXT_PUBLIC_BUILD_SHA, ver deploy.sh).
@@ -50,7 +50,7 @@ export default function AppChrome({ children }: { children: React.ReactNode }) {
             {VERSION_LABEL}
           </span>
         }
-        userSlot={<LogoutButton />}
+        userSlot={<UserFooter />}
       >
         {children}
       </SynertiaShell>

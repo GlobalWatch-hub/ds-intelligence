@@ -11,9 +11,10 @@ deferred until DS approves the format.
 from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from ..config import settings
+from ..core.scope import account_filter
 from ..db import supabase
 
 router = APIRouter()
@@ -24,11 +25,14 @@ LOST_STATES = ("Anulado", "Perdido")
 OPEN_EXCLUDE_STATES = ("Ganho", "Anulado", "Perdido")
 
 
-def _select_all(sb, table: str, columns: str, page_size: int = 1000) -> list[dict]:
+def _select_all(sb, table: str, columns: str, page_size: int = 1000, *, account: str | None = None) -> list[dict]:
     rows: list[dict] = []
     offset = 0
     while True:
-        chunk = sb.table(table).select(columns).range(offset, offset + page_size - 1).execute().data or []
+        q = sb.table(table).select(columns)
+        if account is not None:
+            q = q.contains("source_accounts", [account])
+        chunk = q.range(offset, offset + page_size - 1).execute().data or []
         rows.extend(chunk)
         if len(chunk) < page_size:
             break
@@ -55,6 +59,7 @@ def _week_window(as_of: date) -> tuple[date, date]:
 
 @router.get("/weekly")
 def weekly_recap(
+    request: Request,
     week_of: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -79,15 +84,18 @@ def weekly_recap(
     week_end_dt = datetime.combine(friday + timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
 
     sb = supabase()
+    acct = account_filter(request)  # None for coordenador/admin (loja-wide); else this gestor
     processos = _select_all(
         sb, "processos_real",
         "crm_id, reference, customer_name, customer_telephone, manager_name, "
         "state_id, state_name, type_name, financing_amount, commission_amount, "
-        "docs_mandatory, docs_uploaded, docs_validated, created_on_crm, updated_on_crm, archived"
+        "docs_mandatory, docs_uploaded, docs_validated, created_on_crm, updated_on_crm, archived",
+        account=acct,
     )
     leads = _select_all(
         sb, "leads_real",
-        "crm_id, name, type_full_name, state_name, origin_name, updated_on_crm"
+        "crm_id, name, type_full_name, state_name, origin_name, updated_on_crm",
+        account=acct,
     )
 
     # ----- this week's transitions -----

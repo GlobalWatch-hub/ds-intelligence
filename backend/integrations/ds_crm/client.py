@@ -48,8 +48,21 @@ class CredidekClient:
     # mid-ingest 401s during long paginations.
     REFRESH_MARGIN_S = 300
 
-    def __init__(self, jwt: str | None = None, *, auto_refresh: bool = True):
-        self.jwt = jwt or os.environ.get("DS_CRM_JWT") or ""
+    def __init__(
+        self,
+        jwt: str | None = None,
+        *,
+        auto_refresh: bool = True,
+        email: str | None = None,
+        password: str | None = None,
+    ):
+        # Per-account mode: when explicit creds are given, this client logs in as
+        # that CrediDesk user and keeps its JWT entirely in memory — it ignores
+        # the shared DS_CRM_JWT (Bruno's) and never writes back to .env. This is
+        # what lets the ingest loop pull each platform user's own CRM scope.
+        self._email = email
+        self._password = password
+        self.jwt = jwt or ("" if email else os.environ.get("DS_CRM_JWT")) or ""
         self.auto_refresh = auto_refresh
         if not self.jwt or self._needs_refresh():
             if not auto_refresh:
@@ -79,15 +92,20 @@ class CredidekClient:
             return True
 
     def _refresh_jwt(self):
-        email = os.environ.get("DS_CRM_USERNAME")
-        password = os.environ.get("DS_CRM_PASSWORD")
+        email = self._email or os.environ.get("DS_CRM_USERNAME")
+        password = self._password or os.environ.get("DS_CRM_PASSWORD")
         if not email or not password:
             raise RuntimeError("DS_CRM_USERNAME/PASSWORD missing — cannot mint a fresh JWT")
         print(f"[crm] minting fresh JWT for {email}...")
         t0 = time.time()
         self.jwt = mint_jwt(email, password)
-        persist_jwt(self.jwt, _env_path())
-        print(f"[crm] minted JWT in {time.time()-t0:.1f}s and wrote to .env")
+        # Only the shared (env) account persists its JWT to .env; a per-account
+        # client keeps it in memory so it never clobbers Bruno's DS_CRM_JWT.
+        if not self._email:
+            persist_jwt(self.jwt, _env_path())
+            print(f"[crm] minted JWT in {time.time()-t0:.1f}s and wrote to .env")
+        else:
+            print(f"[crm] minted in-memory JWT in {time.time()-t0:.1f}s for {email}")
         if hasattr(self, "session"):
             self._apply_jwt_headers()
 

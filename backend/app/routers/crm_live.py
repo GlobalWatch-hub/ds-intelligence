@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, Request
 
 from ..core.names import fix_name
+from ..core.scope import account_filter
 from ..db import supabase
 
 router = APIRouter()
@@ -32,19 +33,17 @@ def _age_from_dob(dob: str | None) -> int | None:
     return today.year - d.year - ((today.month, today.day) < (d.month, d.day))
 
 
-def _process_info_map(sb) -> dict[int, dict]:
+def _process_info_map(sb, account: str | None = None) -> dict[int, dict]:
     """Latest process per customer (item 13 + tipo): state_name and type_name,
     keyed by customer_crm_id = clientes_real.crm_id, keeping the most recently
-    updated process. The processos mirror is small (~187 rows, all of the
-    logged-in gestor) so a single fetch is cheap; clients with no process simply
-    don't appear in the map (rendered as '—')."""
-    rows = (
-        sb.table("processos_real")
-        .select("customer_crm_id, state_name, type_name, updated_on_crm, created_on_crm")
-        .execute()
-        .data
-        or []
+    updated process. Scoped to the logged-in gestor's account (loja-wide for
+    admin); clients with no visible process render as '—'."""
+    q = sb.table("processos_real").select(
+        "customer_crm_id, state_name, type_name, updated_on_crm, created_on_crm"
     )
+    if account is not None:
+        q = q.contains("source_accounts", [account])
+    rows = q.execute().data or []
     latest: dict[int, tuple[str, dict]] = {}  # cid -> (sort_key, {estado, tipo})
     for r in rows:
         cid = r.get("customer_crm_id")
@@ -94,13 +93,18 @@ def _select_all(sb, columns: str, page_size: int = 1000) -> list[dict]:
 
 
 @router.get("/filters")
-def list_filter_options():
+def list_filter_options(request: Request):
     """Distinct gestores and process states, for the column filters in the
-    CRM-live view (items 10 + 13)."""
+    CRM-live view (items 10 + 13). Process states/types reflect the logged-in
+    gestor's scope; the gestor (manager) list stays loja-wide."""
     sb = supabase()
+    acct = account_filter(request)
     clientes = _select_all(sb, "manager_name:raw->>managerName")
     managers = sorted({fix_name(c.get("manager_name")) for c in clientes if c.get("manager_name")})
-    proc = sb.table("processos_real").select("state_name, type_name").execute().data or []
+    pq = sb.table("processos_real").select("state_name, type_name")
+    if acct is not None:
+        pq = pq.contains("source_accounts", [acct])
+    proc = pq.execute().data or []
     estados = sorted({p.get("state_name") for p in proc if p.get("state_name")})
     tipos = sorted({p.get("type_name") for p in proc if p.get("type_name")})
     return {"managers": managers, "estados": estados, "tipos": tipos}
@@ -108,6 +112,7 @@ def list_filter_options():
 
 @router.get("/customers")
 def list_customers(
+    request: Request,
     q: str | None = Query(None, description="Search by name, email, NIF or telephone"),
     manager: str | None = Query(None, description="Filter by owning gestor (manager_name)"),
     estado: str | None = Query(None, description="Filter by latest process state"),
@@ -117,7 +122,7 @@ def list_customers(
     offset: int = Query(0, ge=0),
 ):
     sb = supabase()
-    proc_map = _process_info_map(sb)
+    proc_map = _process_info_map(sb, account_filter(request))
 
     q = (q or "").strip()
     manager = (manager or "").strip()

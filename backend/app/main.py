@@ -19,7 +19,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import settings
-from .routers import dashboard, triggers, newsletter, chat, whatsapp, leads, broadcasts, crm_live, recap, auth
+from .routers import dashboard, triggers, newsletter, chat, whatsapp, leads, broadcasts, crm_live, recap, auth, settings as settings_router
 from .routers.auth import COOKIE_NAME, valid_token
 
 app = FastAPI(
@@ -85,3 +85,4 @@ app.include_router(leads.router, prefix="/api/leads", tags=["leads"])
 app.include_router(broadcasts.router, prefix="/api/broadcasts", tags=["broadcasts"])
 app.include_router(crm_live.router, prefix="/api/crm-live", tags=["crm-live"])
 app.include_router(recap.router, prefix="/api/recap", tags=["recap"])
+app.include_router(settings_router.router, prefix="/api/settings", tags=["settings"])

@@ -12,10 +12,11 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from ..config import settings
+from ..core.scope import account_filter
 from ..core.wa_client import send_text, is_demo_recipient
 from ..db import supabase
 
@@ -139,11 +140,14 @@ def _birthday_in_range(dob: date | None, lo: date, hi: date) -> date | None:
     return None
 
 
-def _select_all(sb, table: str, columns: str, page_size: int = 1000) -> list[dict]:
+def _select_all(sb, table: str, columns: str, page_size: int = 1000, *, account: str | None = None) -> list[dict]:
     rows: list[dict] = []
     offset = 0
     while True:
-        chunk = sb.table(table).select(columns).range(offset, offset + page_size - 1).execute().data or []
+        q = sb.table(table).select(columns)
+        if account is not None:
+            q = q.contains("source_accounts", [account])
+        chunk = q.range(offset, offset + page_size - 1).execute().data or []
         rows.extend(chunk)
         if len(chunk) < page_size:
             break
@@ -224,12 +228,14 @@ def _template(trigger: TriggerType, ctx: dict) -> str:
 # --------------------------------------------------------------- list rows
 @router.get("/list")
 def list_trigger_rows(
+    request: Request,
     trigger: TriggerType,
     date_from: str | None = Query(None, description="ISO date — start of a custom range"),
     date_to: str | None = Query(None, description="ISO date — end of a custom range"),
 ):
     sb = supabase()
     today = _today()
+    acct = account_filter(request)  # scope processos/leads to the logged-in gestor
     rng_lo = _parse(date_from)
     rng_hi = _parse(date_to)
     has_range = rng_lo is not None and rng_hi is not None
@@ -362,7 +368,8 @@ def list_trigger_rows(
             sb, "processos_real",
             "crm_id, customer_crm_id, customer_name, customer_telephone, "
             "state_id, state_name, docs_mandatory, docs_uploaded, docs_validated, "
-            "updated_on_crm, type_name"
+            "updated_on_crm, type_name",
+            account=acct,
         )
         d_minus_7 = today - timedelta(days=7)
 
@@ -429,7 +436,8 @@ def list_trigger_rows(
         leads = _select_all(
             sb, "leads_real",
             "crm_id, name, telephone, type_full_name, state_name, origin_name, "
-            "manager_name, updated_on_crm, created_on_crm"
+            "manager_name, updated_on_crm, created_on_crm",
+            account=acct,
         )
         out = []
         thirty_days_ago = today - timedelta(days=30)

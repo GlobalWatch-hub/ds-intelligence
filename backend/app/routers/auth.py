@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from ..config import settings
+from ..core.crypto import verify_password
 
 router = APIRouter()
 
@@ -35,6 +36,27 @@ DISPLAY_NAMES = {
     "bs": "Bruno Sousa",
     "jg": "Jorge Gonçalves",
 }
+
+
+def _db_user(username: str) -> dict | None:
+    """Look up an active platform_users row by username. Returns None if the
+    table/project isn't reachable or no such active user exists — callers then
+    fall back to the env-based shared credentials (`ds`/`amin`)."""
+    try:
+        from ..db import supabase
+
+        res = (
+            supabase()
+            .table("platform_users")
+            .select("username, nome, password_hash, password_salt, is_active")
+            .eq("username", username)
+            .eq("is_active", True)
+            .limit(1)
+            .execute()
+        )
+        return (res.data or [None])[0]
+    except Exception:
+        return None
 
 
 def _users() -> dict[str, str]:
@@ -94,13 +116,24 @@ class LoginIn(BaseModel):
 
 @router.post("/login")
 def login(body: LoginIn, response: Response):
-    users = _users()
-    if not (users and settings.APP_SESSION_SECRET):
+    if not settings.APP_SESSION_SECRET:
         raise HTTPException(503, "Login não configurado no servidor.")
     uname = (body.username or settings.APP_USER).strip()
-    expected = users.get(uname)
-    if not expected or not hmac.compare_digest(body.password or "", expected):
+
+    # 1) DB-backed platform users (source of truth). 2) env shared credentials
+    # (`ds`/`amin` admin/test logins) as a fallback so nobody is locked out.
+    db_row = _db_user(uname)
+    if db_row:
+        ok = verify_password(body.password or "", db_row.get("password_hash"), db_row.get("password_salt"))
+    else:
+        users = _users()
+        if not users:
+            raise HTTPException(503, "Login não configurado no servidor.")
+        expected = users.get(uname)
+        ok = bool(expected) and hmac.compare_digest(body.password or "", expected)
+    if not ok:
         raise HTTPException(401, "Credenciais inválidas.")
+
     response.set_cookie(
         COOKIE_NAME,
         make_token(uname),
@@ -124,4 +157,7 @@ def me(request: Request):
     user = token_user(request.cookies.get(COOKIE_NAME))
     if not user:
         return {"authenticated": False}
-    return {"authenticated": True, "username": user, "nome": DISPLAY_NAMES.get(user, user)}
+    # Prefer the DB display name; fall back to the static map, then the username.
+    row = _db_user(user)
+    nome = (row.get("nome") if row else None) or DISPLAY_NAMES.get(user, user)
+    return {"authenticated": True, "username": user, "nome": nome}

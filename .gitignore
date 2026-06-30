@@ -2,6 +2,7 @@ node_modules/
 .next/
 .env
 .env.local
+cred/
 __pycache__/
 *.pyc
 .venv/
