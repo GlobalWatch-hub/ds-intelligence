@@ -44,7 +44,7 @@ def account_filter(request: Request) -> str | None:
         row = (
             supabase()
             .table("platform_users")
-            .select("username, role, is_active")
+            .select("username, role, is_active, acesso_loja_toda")
             .eq("username", username)
             .eq("is_active", True)
             .limit(1)
@@ -56,6 +56,6 @@ def account_filter(request: Request) -> str | None:
         row = None
     if not row:
         return None  # ds/amin or any non-DB login → see all
-    if (row.get("role") or "gestor") in _SEE_ALL_ROLES:
-        return None
+    if row.get("acesso_loja_toda") or (row.get("role") or "gestor") in _SEE_ALL_ROLES:
+        return None  # "Acesso Loja Toda" (or admin/coordenador role) → loja-wide
     return username

@@ -67,6 +67,7 @@ def get_account(user_id: int):
 
 
 class AccountIn(BaseModel):
+    username: str | None = None  # editable login handle (must stay unique)
     nome: str | None = None
     telefone: str | None = None
     email: str | None = None
@@ -83,6 +84,24 @@ def update_account(user_id: int, body: AccountIn):
         "email": body.email,
         "updated_at": _now(),
     }
+    # Username is editable but must remain unique. Changing it means the user logs
+    # in with the new handle; their processo/lead scope re-tags on the next ingest
+    # (source_accounts is keyed on username).
+    if body.username:
+        new_username = body.username.strip()
+        if new_username:
+            clash = (
+                sb.table("platform_users")
+                .select("id")
+                .eq("username", new_username)
+                .neq("id", user_id)
+                .limit(1)
+                .execute()
+                .data
+            )
+            if clash:
+                raise HTTPException(409, "Esse nome de utilizador já existe.")
+            patch["username"] = new_username
     if body.password:
         h, salt = hash_password(body.password)
         patch["password_hash"] = h
@@ -107,10 +126,11 @@ def service_unlock(body: PinIn):
 def get_crm(user_id: int, x_service_pin: str | None = Header(None)):
     _require_pin(x_service_pin)
     sb = supabase()
-    row = _get_user_or_404(sb, user_id, "id, crm_username, crm_password_enc")
+    row = _get_user_or_404(sb, user_id, "id, crm_username, crm_password_enc, acesso_loja_toda")
     return {
         "crm_username": row.get("crm_username"),
         "crm_password_set": bool(row.get("crm_password_enc")),
+        "acesso_loja_toda": bool(row.get("acesso_loja_toda")),
     }
 
 
@@ -128,4 +148,21 @@ def update_crm(user_id: int, body: CrmIn, x_service_pin: str | None = Header(Non
     if body.crm_password:
         patch["crm_password_enc"] = encrypt_secret(body.crm_password)
     sb.table("platform_users").update(patch).eq("id", user_id).execute()
+    return {"ok": True}
+
+
+class LojaTodaIn(BaseModel):
+    acesso_loja_toda: bool
+
+
+@router.put("/users/{user_id}/loja-toda")
+def update_loja_toda(user_id: int, body: LojaTodaIn, x_service_pin: str | None = Header(None)):
+    """Service-gated: toggle whether this user sees the whole loja (loja-wide) or
+    only their own CRM account's scope. Read by core.scope.account_filter."""
+    _require_pin(x_service_pin)
+    sb = supabase()
+    _get_user_or_404(sb, user_id, "id")
+    sb.table("platform_users").update(
+        {"acesso_loja_toda": body.acesso_loja_toda, "updated_at": _now()}
+    ).eq("id", user_id).execute()
     return {"ok": True}

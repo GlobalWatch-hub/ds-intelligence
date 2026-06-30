@@ -22,6 +22,7 @@ ORDER = [
     "009_platform_users.sql",
     "010_source_account.sql",
     "011_source_accounts_array.sql",
+    "012_acesso_loja_toda.sql",
 ]
 
 MIG_DIR = Path(__file__).resolve().parents[1] / "migrations"

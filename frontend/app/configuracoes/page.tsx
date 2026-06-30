@@ -20,13 +20,13 @@ function Field({ label, ...props }: { label: string } & React.InputHTMLAttribute
 
 // ---- Conta tab -----------------------------------------------------------
 function ContaTab({ userId }: { userId: number }) {
-  const { data } = useSWR<Account>(`/api/settings/users/${userId}/account`, api);
-  const [form, setForm] = useState({ nome: '', telefone: '', email: '', password: '' });
+  const { data, mutate } = useSWR<Account>(`/api/settings/users/${userId}/account`, api);
+  const [form, setForm] = useState({ username: '', nome: '', telefone: '', email: '', password: '' });
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (data) setForm({ nome: data.nome ?? '', telefone: data.telefone ?? '', email: data.email ?? '', password: '' });
+    if (data) setForm({ username: data.username ?? '', nome: data.nome ?? '', telefone: data.telefone ?? '', email: data.email ?? '', password: '' });
   }, [data]);
 
   async function save() {
@@ -36,6 +36,7 @@ function ContaTab({ userId }: { userId: number }) {
       await api(`/api/settings/users/${userId}/account`, {
         method: 'PUT',
         body: JSON.stringify({
+          username: form.username,
           nome: form.nome,
           telefone: form.telefone,
           email: form.email,
@@ -44,6 +45,7 @@ function ContaTab({ userId }: { userId: number }) {
       });
       setMsg('✓ Conta atualizada.');
       setForm((f) => ({ ...f, password: '' }));
+      mutate();
     } catch (e: any) {
       setMsg(`Erro: ${e.message}`);
     } finally {
@@ -54,6 +56,7 @@ function ContaTab({ userId }: { userId: number }) {
   if (!data) return <p className="text-sm text-ink-400">A carregar …</p>;
   return (
     <div className="max-w-md space-y-4">
+      <Field label="Utilizador (username de acesso)" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoComplete="off" />
       <Field label="Nome" value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
       <Field label="Telemóvel" value={form.telefone} onChange={(e) => setForm({ ...form, telefone: e.target.value })} />
       <Field label="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
@@ -122,7 +125,7 @@ function DefinicoesTab({ userId, pin, setPin }: { userId: number; pin: string | 
 
 function CrmForm({ userId, pin, onLock }: { userId: number; pin: string; onLock: () => void }) {
   const headers = { 'X-Service-Pin': pin };
-  const { data, mutate } = useSWR<{ crm_username: string | null; crm_password_set: boolean }>(
+  const { data, mutate } = useSWR<{ crm_username: string | null; crm_password_set: boolean; acesso_loja_toda: boolean }>(
     [`/api/settings/users/${userId}/crm`, pin],
     ([path]) => api(path as string, { headers }),
   );
@@ -130,10 +133,28 @@ function CrmForm({ userId, pin, onLock }: { userId: number; pin: string; onLock:
   const [crmPass, setCrmPass] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [lojaBusy, setLojaBusy] = useState(false);
 
   useEffect(() => {
     if (data) setCrmUser(data.crm_username ?? '');
   }, [data]);
+
+  async function toggleLojaToda(value: boolean) {
+    setLojaBusy(true);
+    setMsg(null);
+    try {
+      await api(`/api/settings/users/${userId}/loja-toda`, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify({ acesso_loja_toda: value }),
+      });
+      mutate();
+    } catch (e: any) {
+      setMsg(`Erro: ${e.message}`);
+    } finally {
+      setLojaBusy(false);
+    }
+  }
 
   async function save() {
     setBusy(true);
@@ -178,6 +199,23 @@ function CrmForm({ userId, pin, onLock }: { userId: number; pin: string; onLock:
         </button>
         {msg && <span className="text-sm text-ink-500">{msg}</span>}
       </div>
+
+      <label className="flex items-start gap-3 rounded-lg border border-ink-200 bg-ink-50/50 px-3 py-3">
+        <input
+          type="checkbox"
+          className="mt-0.5 h-4 w-4 accent-[color:var(--accent)]"
+          checked={!!data.acesso_loja_toda}
+          disabled={lojaBusy}
+          onChange={(e) => toggleLojaToda(e.target.checked)}
+        />
+        <span className="text-sm">
+          <span className="font-medium text-ink-900">Acesso Loja Toda</span>
+          <span className="block text-xs text-ink-500">
+            Quando ligado, este utilizador vê os processos e leads de toda a loja, em vez de
+            apenas os da sua conta CRM. {lojaBusy && '(a guardar …)'}
+          </span>
+        </span>
+      </label>
     </div>
   );
 }
